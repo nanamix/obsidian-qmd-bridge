@@ -1,6 +1,6 @@
 # QMD Bridge for Obsidian
 
-[qmd](https://github.com/qmd-lab/qmd) CLI 검색 도구를 Obsidian 내에서 직접 사용할 수 있게 해주는 플러그인입니다.
+[qmd](https://github.com/tobi/qmd) CLI 검색 도구를 Obsidian 내에서 직접 사용할 수 있게 해주는 플러그인입니다.
 터미널 없이 Obsidian 사이드바와 명령 팔레트만으로 모든 qmd 기능을 활용하세요.
 
 ## 기능
@@ -13,7 +13,7 @@
 
 ## 요구 사항
 
-- [qmd](https://github.com/qmd-lab/qmd) v1.0.7 이상 설치
+- [qmd](https://github.com/tobi/qmd) v1.0.7 이상 설치
 - Obsidian 1.4.0 이상
 - 데스크탑 전용 (`isDesktopOnly: true`)
 
