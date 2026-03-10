@@ -1,0 +1,238 @@
+/* QMD Bridge Plugin Styles */
+
+.qmd-search-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.qmd-action-row {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 2px;
+}
+
+.qmd-action-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 2px;
+  border-radius: 5px;
+  background: var(--background-secondary);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.qmd-action-btn:hover {
+  background: var(--background-secondary-alt);
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+}
+
+.qmd-action-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.qmd-action-label {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.qmd-search-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.qmd-search-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.qmd-search-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.qmd-search-input input {
+  width: 100%;
+}
+
+.qmd-select {
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.qmd-select:hover {
+  border-color: var(--interactive-accent);
+}
+
+.qmd-results-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qmd-loading {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 16px;
+  font-size: 13px;
+}
+
+.qmd-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 16px;
+  font-size: 13px;
+}
+
+.qmd-error {
+  color: var(--text-error);
+  padding: 8px;
+  font-size: 12px;
+  background: var(--background-modifier-error);
+  border-radius: 4px;
+}
+
+.qmd-result-card {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.qmd-result-card:hover {
+  background: var(--background-secondary-alt);
+  border-color: var(--interactive-accent);
+}
+
+.qmd-result-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.qmd-score-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.qmd-result-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.qmd-result-path {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.qmd-result-snippet {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Progress Modal */
+.qmd-progress-log {
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--background-secondary);
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  color: var(--text-normal);
+}
+
+/* Status Modal */
+.qmd-status-content {
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  background: var(--background-secondary);
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Settings */
+.qmd-settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.qmd-settings-table th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.qmd-settings-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--background-modifier-border-hover);
+}
+
+.qmd-settings-table input {
+  width: 100%;
+  font-size: 12px;
+}
+
+.qmd-collection-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}

@@ -1,0 +1,20 @@
+{
+  "name": "obsidian-qmd-bridge",
+  "version": "1.0.0",
+  "description": "QMD Bridge plugin for Obsidian",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "deploy": "node esbuild.config.mjs production && cp main.js styles.css ${VAULT_PATH:?set VAULT_PATH}/.obsidian/plugins/qmd-bridge/"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.24.0",
+    "obsidian": "latest",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "builtin-modules": "^5.0.0"
+  }
+}
