@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf } from "obsidian";
+import { FileSystemAdapter, ItemView, Notice, TFile, WorkspaceLeaf, normalizePath } from "obsidian";
 import type QmdBridgePlugin from "./main";
 import type { QmdResult } from "./qmd-executor";
 
@@ -129,6 +129,14 @@ export class QmdSearchView extends ItemView {
     const limit =
       parseInt(this.limitInput.value) || this.plugin.settings.defaultResultCount;
 
+    // Deep 검색은 전체 컬렉션에서 실행 시 리랭킹 컨텍스트 크기 초과로 실패할 수 있음
+    if (type === "deep" && !collection) {
+      new Notice(
+        "⚠️ Deep 검색은 특정 컬렉션을 선택하면 더 안정적으로 동작합니다.\n전체 컬렉션 검색을 계속 진행합니다...",
+        5000
+      );
+    }
+
     this.showLoading();
 
     try {
@@ -161,10 +169,11 @@ export class QmdSearchView extends ItemView {
 
   private showError(msg: string) {
     this.resultsContainer.empty();
-    this.resultsContainer.createEl("div", {
-      cls: "qmd-error",
-      text: `오류: ${msg}`,
-    });
+    const errEl = this.resultsContainer.createEl("div", { cls: "qmd-error" });
+    // 줄바꿈 포함 메시지를 개별 단락으로 표시
+    for (const line of msg.split("\n")) {
+      if (line.trim()) errEl.createEl("p", { text: line.trim() });
+    }
   }
 
   private showResults(results: QmdResult[]) {
@@ -174,6 +183,18 @@ export class QmdSearchView extends ItemView {
       this.showEmpty("검색 결과가 없습니다");
       return;
     }
+
+    // 결과 로그 (디버깅용)
+    console.group("QMD 검색 결과");
+    results.forEach((r, i) => {
+      console.log(`#${i+1}`, {
+        file: r.file,
+        collection: r.collection,
+        relativePath: r.relativePath,
+        title: r.title
+      });
+    });
+    console.groupEnd();
 
     for (const result of results) {
       this.renderResultCard(result);
@@ -227,29 +248,55 @@ export class QmdSearchView extends ItemView {
       .substring(0, 200);
   }
 
+  /**
+   * qmd는 경로를 정규화(소문자 + '_'→'-')하여 저장하므로,
+   * 정확한 경로 매칭 실패 시 볼트 전체 파일 목록에서 퍼지 매칭으로 실제 파일을 찾는다.
+   */
+  private findFileByFuzzyPath(vaultRelativePath: string): TFile | null {
+    // 정확한 경로로 먼저 시도
+    const exact = this.app.vault.getAbstractFileByPath(vaultRelativePath);
+    if (exact instanceof TFile) return exact;
+
+    // qmd 정규화 역변환: 소문자 통일 + '_' == '-' 동일 취급
+    const normalize = (p: string) => p.toLowerCase().replace(/_/g, "-");
+    const target = normalize(vaultRelativePath);
+
+    const match = this.app.vault.getFiles().find(f => normalize(f.path) === target);
+    return match ?? null;
+  }
+
   private async openResult(result: QmdResult) {
-    // @ts-ignore
-    const vaultRoot: string = (this.app.vault.adapter as any).basePath;
+    let vaultRoot = "";
+    if (this.app.vault.adapter instanceof FileSystemAdapter) {
+      vaultRoot = this.app.vault.adapter.getBasePath();
+    } else {
+      // Fallback for non-filesystem adapters (less likely on desktop)
+      // @ts-ignore
+      vaultRoot = this.app.vault.adapter.basePath || "";
+    }
+
     const vaultPath = this.plugin.executor.resolveToVaultRelativePath(result, vaultRoot);
 
     if (!vaultPath) {
       const collBase = this.plugin.settings.collectionPaths[result.collection];
       if (collBase) {
-        new Notice(`다른 볼트의 파일:\n${collBase}/${result.relativePath}`);
+        new Notice(`다른 볼트의 파일입니다:\n컬렉션: ${result.collection}\n경로: ${collBase}/${result.relativePath}`);
       } else {
         new Notice(
-          `컬렉션 '${result.collection}' 경로가 설정되지 않았습니다.\n설정 > QMD Bridge에서 경로를 추가하세요.`
+          `컬렉션 '${result.collection}'의 경로가 설정되지 않았습니다.\n설정 > QMD Bridge에서 'config에서 로드'를 클릭하세요.`
         );
       }
       return;
     }
 
-    const file = this.app.vault.getAbstractFileByPath(vaultPath);
+    const normalizedVaultPath = normalizePath(vaultPath);
+    const file = this.findFileByFuzzyPath(normalizedVaultPath);
     if (file instanceof TFile) {
       const leaf = this.app.workspace.getLeaf(false);
       await leaf.openFile(file);
     } else {
-      new Notice(`파일을 찾을 수 없습니다: ${vaultPath}`);
+      new Notice(`볼트 내에서 파일을 찾을 수 없습니다.\n상대경로: ${normalizedVaultPath}`);
+      console.warn("QMD 파일 열기 실패:", { normalizedVaultPath, result, vaultRoot });
     }
   }
 

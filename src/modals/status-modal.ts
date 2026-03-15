@@ -9,7 +9,8 @@ export class StatusModal extends Modal {
   }
 
   onOpen() {
-    const { contentEl } = this;
+    const { contentEl, modalEl } = this;
+    modalEl.addClass("qmd-modal-large");
     contentEl.empty();
     contentEl.createEl("h3", { text: "QMD 상태" });
 

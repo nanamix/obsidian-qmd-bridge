@@ -69,7 +69,9 @@ export class QmdExecutor {
         if (code === 0) {
           resolve(stdout);
         } else {
-          reject(new Error(`qmd 종료 코드 ${code}: ${stderr || stdout}`));
+          // stderr에서 핵심 오류 메시지만 추출 (스택 트레이스 제거)
+          const cleanError = this.extractCleanError(stderr || stdout);
+          reject(new Error(cleanError));
         }
       });
 
@@ -146,6 +148,27 @@ export class QmdExecutor {
     return this.parseJsonResults(output);
   }
 
+  /** stderr / stdout 에서 스택 트레이스를 제거하고 핵심 오류 메시지만 반환 */
+  private extractCleanError(raw: string): string {
+    if (!raw) return "알 수 없는 오류";
+
+    // 컨텍스트 크기 초과 오류 (node-llama-cpp 리랭킹 실패)
+    if (raw.includes("exceed the context size")) {
+      return (
+        "Deep 검색 실패: 문서가 너무 길어 리랭킹 모델의 컨텍스트 크기를 초과했습니다.\n" +
+        "💡 특정 컬렉션을 선택한 후 다시 시도하거나, BM25 또는 Vector 검색을 사용하세요."
+      );
+    }
+
+    // Error: ... 패턴에서 첫 번째 메시지만 추출
+    const errorMatch = raw.match(/Error:\s*(.+)/);
+    if (errorMatch) return errorMatch[1].trim();
+
+    // 마지막 비어 있지 않은 줄 반환 (진행 로그 제거)
+    const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
+    return lines[lines.length - 1] || raw.substring(0, 200);
+  }
+
   async deepQuery(
     query: string,
     collection?: string,
@@ -199,20 +222,61 @@ export class QmdExecutor {
   parseQmdUri(uri: string): { collection: string; relativePath: string } | null {
     const match = uri.match(/^qmd:\/\/([^/]+)\/(.+)$/);
     if (!match) return null;
-    return { collection: match[1], relativePath: match[2] };
+    try {
+      return { 
+        collection: match[1], 
+        relativePath: decodeURIComponent(match[2]) 
+      };
+    } catch (e) {
+      return { collection: match[1], relativePath: match[2] };
+    }
   }
 
   resolveToVaultRelativePath(result: QmdResult, vaultRoot: string): string | null {
     const collectionBase = this.collectionPaths[result.collection];
-    if (!collectionBase) return null;
+    if (!collectionBase) {
+      console.log("QMD: No collection path found for", result.collection);
+      return null;
+    }
+
+    // 경로 정규화 함수
+    const normalize = (p: string) => p.replace(/[\\\/]+/g, "/").replace(/\/$/, "");
+    
+    const nvRoot = normalize(vaultRoot);
+    const ncBase = normalize(collectionBase);
+
+    console.log("QMD Debug: Path Comparison", {
+      vaultRoot: nvRoot,
+      collectionBase: ncBase,
+      resultPath: result.relativePath
+    });
+
+    // 대소문자 구분 없이 비교 (macOS/Windows 대응)
+    const nvRootLower = nvRoot.toLowerCase();
+    const ncBaseLower = ncBase.toLowerCase();
 
     if (
-      collectionBase === vaultRoot ||
-      collectionBase.startsWith(vaultRoot + "/")
+      ncBaseLower === nvRootLower ||
+      ncBaseLower.startsWith(nvRootLower + "/")
     ) {
-      const prefix = collectionBase.slice(vaultRoot.length).replace(/^\//, "");
-      return prefix ? `${prefix}/${result.relativePath}` : result.relativePath;
+      let vaultRelativePrefix = "";
+      if (ncBaseLower !== nvRootLower) {
+        vaultRelativePrefix = ncBase
+          .slice(nvRoot.length)
+          .replace(/^[\\\/]/, "");
+      }
+
+      const cleanRelativePath = result.relativePath.replace(/^[\\\/]/, "");
+      
+      const finalPath = vaultRelativePrefix
+        ? `${vaultRelativePrefix}/${cleanRelativePath}`
+        : cleanRelativePath;
+
+      console.log("QMD Debug: Resolved Vault Path ->", finalPath);
+      return finalPath;
     }
+
+    console.log("QMD Debug: Path is outside this vault.");
     return null;
   }
 
