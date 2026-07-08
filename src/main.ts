@@ -9,13 +9,16 @@ import { CollectionModal } from "./modals/collection-modal";
 export default class QmdBridgePlugin extends Plugin {
   settings: QmdBridgeSettings;
   executor: QmdExecutor;
+  private updateRunning = false;
+  private embedRunning = false;
 
   async onload() {
     await this.loadSettings();
 
     this.executor = new QmdExecutor(
       this.settings.qmdPath,
-      this.settings.collectionPaths
+      this.settings.collectionPaths,
+      this.settings.forceCpu
     );
 
     // 사이드바 뷰 등록
@@ -98,6 +101,12 @@ export default class QmdBridgePlugin extends Plugin {
   }
 
   runUpdate() {
+    if (this.updateRunning) {
+      new Notice("QMD 인덱스 업데이트가 이미 실행 중입니다.");
+      return;
+    }
+
+    this.updateRunning = true;
     const modal = new ProgressModal(this.app, "QMD 인덱스 업데이트");
     modal.open();
 
@@ -107,12 +116,22 @@ export default class QmdBridgePlugin extends Plugin {
       (err) => {
         modal.appendLine(`오류: ${err.message}`);
         modal.finish(1);
+        this.updateRunning = false;
       },
-      (code) => modal.finish(code)
+      (code) => {
+        modal.finish(code);
+        this.updateRunning = false;
+      }
     );
   }
 
   runEmbed() {
+    if (this.embedRunning) {
+      new Notice("QMD 임베딩 생성이 이미 실행 중입니다.");
+      return;
+    }
+
+    this.embedRunning = true;
     const modal = new ProgressModal(this.app, "QMD 임베딩 생성");
     modal.open();
 
@@ -122,8 +141,12 @@ export default class QmdBridgePlugin extends Plugin {
       (err) => {
         modal.appendLine(`오류: ${err.message}`);
         modal.finish(1);
+        this.embedRunning = false;
       },
-      (code) => modal.finish(code)
+      (code) => {
+        modal.finish(code);
+        this.embedRunning = false;
+      }
     );
   }
 
@@ -157,7 +180,11 @@ export default class QmdBridgePlugin extends Plugin {
     await this.saveData(this.settings);
     // executor 설정 업데이트
     if (this.executor) {
-      this.executor.updateSettings(this.settings.qmdPath, this.settings.collectionPaths);
+      this.executor.updateSettings(
+        this.settings.qmdPath,
+        this.settings.collectionPaths,
+        this.settings.forceCpu
+      );
     }
     // 검색 뷰 컬렉션 옵션 갱신
     const leaves = this.app.workspace.getLeavesOfType(SEARCH_VIEW_TYPE);

@@ -3,6 +3,7 @@ import type QmdBridgePlugin from "./main";
 
 export interface QmdBridgeSettings {
   qmdPath: string;
+  forceCpu: boolean;
   defaultSearchType: "bm25" | "vector" | "deep";
   defaultResultCount: number;
   defaultCollection: string;
@@ -10,7 +11,8 @@ export interface QmdBridgeSettings {
 }
 
 export const DEFAULT_SETTINGS: QmdBridgeSettings = {
-  qmdPath: "/Users/jinyoungha/.asdf/shims/qmd",
+  qmdPath: "/Users/jyha/.asdf/shims/qmd",
+  forceCpu: true,
   defaultSearchType: "bm25",
   defaultResultCount: 10,
   defaultCollection: "obsidian",
@@ -55,6 +57,18 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
             } else {
               new Notice("✗ qmd 연결 실패. 경로를 확인하세요.");
             }
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("CPU 모드 강제")
+      .setDesc("Metal 백엔드 오류가 있을 때 qmd 실행에 QMD_FORCE_CPU=1을 적용합니다")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.forceCpu)
+          .onChange(async (value) => {
+            this.plugin.settings.forceCpu = value;
+            await this.plugin.saveSettings();
           })
       );
 

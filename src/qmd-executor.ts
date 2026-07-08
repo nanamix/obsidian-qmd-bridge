@@ -23,29 +23,41 @@ export interface CollectionPathMap {
 export class QmdExecutor {
   private qmdPath: string;
   private collectionPaths: CollectionPathMap;
+  private forceCpu: boolean;
 
-  constructor(qmdPath: string, collectionPaths: CollectionPathMap = {}) {
+  constructor(qmdPath: string, collectionPaths: CollectionPathMap = {}, forceCpu = false) {
     this.qmdPath = qmdPath;
     this.collectionPaths = collectionPaths;
+    this.forceCpu = forceCpu;
   }
 
-  updateSettings(qmdPath: string, collectionPaths: CollectionPathMap) {
+  updateSettings(qmdPath: string, collectionPaths: CollectionPathMap, forceCpu: boolean) {
     this.qmdPath = qmdPath;
     this.collectionPaths = collectionPaths;
+    this.forceCpu = forceCpu;
   }
 
   private getEnv(): NodeJS.ProcessEnv {
-    return {
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
       PATH: [
-        "/Users/jinyoungha/.asdf/shims",
+        path.join(os.homedir(), ".asdf", "shims"),
+        "/opt/homebrew/bin",
         "/usr/local/bin",
         "/usr/bin",
         "/bin",
-        "/opt/homebrew/bin",
+        "/usr/sbin",
+        "/sbin",
         process.env.PATH || "",
       ].join(":"),
+      NO_COLOR: "1",
     };
+
+    if (this.forceCpu) {
+      env.QMD_FORCE_CPU = "1";
+    }
+
+    return env;
   }
 
   async runCommand(args: string[]): Promise<string> {
