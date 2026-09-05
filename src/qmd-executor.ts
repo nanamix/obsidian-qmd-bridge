@@ -47,7 +47,7 @@ export class QmdExecutor {
     collectionPaths: CollectionPathMap = {},
     forceCpu = false,
     dryRun = false,
-    logLevel: LogLevel = "INFO"
+    logLevel: LogLevel = "WARN"
   ) {
     this.qmdPath = qmdPath;
     this.collectionPaths = collectionPaths;
