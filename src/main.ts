@@ -266,7 +266,7 @@ export default class QmdBridgePlugin extends Plugin {
     let failedCount = processedFiles.size > 0 ? failedFiles.size : 0;
     let errorCount = errors;
 
-    if (code !== 0 && failedCount === 0) {
+    if (code !== 0 && processedFiles.size === 0) {
       failedCount = 1;
       succeededCount = 0;
       errorCount = Math.max(1, errorCount);

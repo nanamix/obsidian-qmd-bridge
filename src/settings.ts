@@ -1,5 +1,4 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
-import * as os from "os";
 import type QmdBridgePlugin from "./main";
 
 export interface QmdBridgeSettings {
@@ -14,7 +13,7 @@ export interface QmdBridgeSettings {
 }
 
 export const DEFAULT_SETTINGS: QmdBridgeSettings = {
-  qmdPath: `${os.homedir()}/.asdf/shims/qmd`,
+  qmdPath: "qmd",
   forceCpu: true,
   dryRun: false,
   logLevel: "INFO",
