@@ -16,7 +16,7 @@ export const DEFAULT_SETTINGS: QmdBridgeSettings = {
   qmdPath: "qmd",
   forceCpu: true,
   dryRun: false,
-  logLevel: "INFO",
+  logLevel: "WARN",
   defaultSearchType: "bm25",
   defaultResultCount: 10,
   defaultCollection: "obsidian",
@@ -90,7 +90,7 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("로그 레벨")
-      .setDesc("로그 상세도 (기본: INFO)")
+      .setDesc("로그 상세도 (기본: WARN)")
       .addDropdown((drop) =>
         drop
           .addOption("ERROR", "ERROR")
