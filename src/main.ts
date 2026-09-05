@@ -11,6 +11,7 @@ export default class QmdBridgePlugin extends Plugin {
   executor: QmdExecutor;
   private updateRunning = false;
   private embedRunning = false;
+  private static readonly LOG_LEVEL_ORDER = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 } as const;
 
   async onload() {
     await this.loadSettings();
@@ -18,7 +19,9 @@ export default class QmdBridgePlugin extends Plugin {
     this.executor = new QmdExecutor(
       this.settings.qmdPath,
       this.settings.collectionPaths,
-      this.settings.forceCpu
+      this.settings.forceCpu,
+      this.settings.dryRun,
+      this.settings.logLevel
     );
 
     // 사이드바 뷰 등록
@@ -110,16 +113,29 @@ export default class QmdBridgePlugin extends Plugin {
     const modal = new ProgressModal(this.app, "QMD 인덱스 업데이트");
     modal.open();
 
+    const command = ["update"];
+    if (this.settings.dryRun) {
+      this.renderDryRun(modal, command);
+      this.updateRunning = false;
+      return;
+    }
+
+    const startedAt = Date.now();
+    const lines: string[] = [];
+
     this.executor.runStreamingCommand(
-      ["update"],
-      (line) => modal.appendLine(line),
+      command,
+      (line) => {
+        lines.push(line);
+        modal.appendLine(line);
+      },
       (err) => {
         modal.appendLine(`오류: ${err.message}`);
-        modal.finish(1);
+        modal.finish(1, this.buildReportSummary(command[0], startedAt, lines, 1));
         this.updateRunning = false;
       },
       (code) => {
-        modal.finish(code);
+        modal.finish(code, this.buildReportSummary(command[0], startedAt, lines, code));
         this.updateRunning = false;
       }
     );
@@ -135,19 +151,93 @@ export default class QmdBridgePlugin extends Plugin {
     const modal = new ProgressModal(this.app, "QMD 임베딩 생성");
     modal.open();
 
+    const command = ["embed"];
+    if (this.settings.dryRun) {
+      this.renderDryRun(modal, command);
+      this.embedRunning = false;
+      return;
+    }
+
+    const startedAt = Date.now();
+    const lines: string[] = [];
+
     this.executor.runStreamingCommand(
-      ["embed"],
-      (line) => modal.appendLine(line),
+      command,
+      (line) => {
+        lines.push(line);
+        modal.appendLine(line);
+      },
       (err) => {
         modal.appendLine(`오류: ${err.message}`);
-        modal.finish(1);
+        modal.finish(1, this.buildReportSummary(command[0], startedAt, lines, 1));
         this.embedRunning = false;
       },
       (code) => {
-        modal.finish(code);
+        modal.finish(code, this.buildReportSummary(command[0], startedAt, lines, code));
         this.embedRunning = false;
       }
     );
+  }
+
+  shouldLog(level: "ERROR" | "WARN" | "INFO" | "DEBUG"): boolean {
+    return QmdBridgePlugin.LOG_LEVEL_ORDER[level] <= QmdBridgePlugin.LOG_LEVEL_ORDER[this.settings.logLevel];
+  }
+
+  log(level: "ERROR" | "WARN" | "INFO" | "DEBUG", ...args: unknown[]) {
+    if (!this.shouldLog(level)) return;
+    if (level === "ERROR") {
+      console.error(...args);
+    } else if (level === "WARN") {
+      console.warn(...args);
+    } else {
+      console.log(...args);
+    }
+  }
+
+  private renderDryRun(modal: ProgressModal, command: string[]) {
+    modal.appendLine("[DRY-RUN] 실제 변환은 실행되지 않습니다.");
+    modal.appendLine("[DRY-RUN] 실행 예정 작업:");
+    modal.appendLine(`- 명령: ${this.settings.qmdPath} ${command.join(" ")}`);
+    modal.appendLine(`- QMD_FORCE_CPU=${this.settings.forceCpu ? "1" : "0"}`);
+    modal.appendLine(`- QMD_LOG_LEVEL=${this.settings.logLevel.toLowerCase()}`);
+    modal.finish(
+      0,
+      [
+        "=== 변환 보고서 요약 ===",
+        "모드: DRY-RUN",
+        "처리된 파일 수: 0",
+        "성공한 변환: 0",
+        "실패한 변환: 0",
+        "경고: 0",
+        "오류: 0",
+        "실행 시간: 0.00초",
+      ].join("\n")
+    );
+  }
+
+  private buildReportSummary(commandName: string, startedAt: number, lines: string[], code: number): string {
+    const durationSec = ((Date.now() - startedAt) / 1000).toFixed(2);
+    const warnings = lines.filter((line) => /\bwarn(?:ing)?\b|경고/i.test(line)).length;
+    const errors = lines.filter((line) => /\berror\b|오류|\bfail(?:ed)?\b/i.test(line)).length;
+    const processedFiles = new Set(
+      lines
+        .map((line) => {
+          const match = line.match(/([^\s"'`]+?\.(?:md|markdown|qmd|txt))/i);
+          return match ? match[1] : "";
+        })
+        .filter(Boolean)
+    ).size;
+
+    return [
+      "=== 변환 보고서 요약 ===",
+      `작업: ${commandName}`,
+      `처리된 파일 수: ${processedFiles}`,
+      `성공한 변환: ${code === 0 ? 1 : 0}`,
+      `실패한 변환: ${code === 0 ? 0 : 1}`,
+      `경고: ${warnings}`,
+      `오류: ${errors}`,
+      `실행 시간: ${durationSec}초`,
+    ].join("\n");
   }
 
   async showStatus() {
@@ -183,7 +273,9 @@ export default class QmdBridgePlugin extends Plugin {
       this.executor.updateSettings(
         this.settings.qmdPath,
         this.settings.collectionPaths,
-        this.settings.forceCpu
+        this.settings.forceCpu,
+        this.settings.dryRun,
+        this.settings.logLevel
       );
     }
     // 검색 뷰 컬렉션 옵션 갱신
