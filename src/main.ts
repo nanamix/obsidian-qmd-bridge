@@ -115,7 +115,7 @@ export default class QmdBridgePlugin extends Plugin {
 
     const command = ["update"];
     if (this.settings.dryRun) {
-      this.renderDryRun(modal, command);
+      this.renderDryRun(modal, command[0], command);
       this.updateRunning = false;
       return;
     }
@@ -153,7 +153,7 @@ export default class QmdBridgePlugin extends Plugin {
 
     const command = ["embed"];
     if (this.settings.dryRun) {
-      this.renderDryRun(modal, command);
+      this.renderDryRun(modal, command[0], command);
       this.embedRunning = false;
       return;
     }
@@ -194,7 +194,7 @@ export default class QmdBridgePlugin extends Plugin {
     }
   }
 
-  private renderDryRun(modal: ProgressModal, command: string[]) {
+  private renderDryRun(modal: ProgressModal, operationName: string, command: string[]) {
     modal.appendLine("[DRY-RUN] 실제 변환은 실행되지 않습니다.");
     modal.appendLine("[DRY-RUN] 실행 예정 작업:");
     modal.appendLine(`- 명령: ${this.settings.qmdPath} ${command.join(" ")}`);
@@ -204,6 +204,7 @@ export default class QmdBridgePlugin extends Plugin {
       0,
       [
         "=== 변환 보고서 요약 ===",
+        `작업: ${operationName}`,
         "모드: DRY-RUN",
         "처리된 파일 수: 0",
         "성공한 변환: 0",
@@ -261,8 +262,15 @@ export default class QmdBridgePlugin extends Plugin {
     }
 
     const succeededWithoutFailures = [...succeededFiles].filter((file) => !failedFiles.has(file)).length;
-    const succeededCount = processedFiles.size > 0 ? succeededWithoutFailures : 0;
-    const failedCount = processedFiles.size > 0 ? failedFiles.size : 0;
+    let succeededCount = processedFiles.size > 0 ? succeededWithoutFailures : 0;
+    let failedCount = processedFiles.size > 0 ? failedFiles.size : 0;
+    let errorCount = errors;
+
+    if (code !== 0 && failedCount === 0) {
+      failedCount = 1;
+      succeededCount = 0;
+      errorCount = Math.max(1, errorCount);
+    }
 
     return [
       "=== 변환 보고서 요약 ===",
@@ -271,7 +279,7 @@ export default class QmdBridgePlugin extends Plugin {
       `성공한 변환: ${succeededCount}`,
       `실패한 변환: ${failedCount}`,
       `경고: ${warnings}`,
-      `오류: ${errors}`,
+      `오류: ${errorCount}`,
       `실행 시간: ${durationSec}초`,
     ].join("\n");
   }
