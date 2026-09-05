@@ -35,8 +35,12 @@ export class ProgressModal extends Modal {
     this.logEl.scrollTop = this.logEl.scrollHeight;
   }
 
-  finish(code: number) {
+  finish(code: number, summary?: string) {
     this.isDone = true;
+    if (summary) {
+      this.appendLine("");
+      this.appendLine(summary);
+    }
     if (code === 0) {
       this.appendLine("\n✓ 완료");
     } else {

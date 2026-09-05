@@ -184,17 +184,18 @@ export class QmdSearchView extends ItemView {
       return;
     }
 
-    // 결과 로그 (디버깅용)
-    console.group("QMD 검색 결과");
-    results.forEach((r, i) => {
-      console.log(`#${i+1}`, {
-        file: r.file,
-        collection: r.collection,
-        relativePath: r.relativePath,
-        title: r.title
+    if (this.plugin.shouldLog("DEBUG")) {
+      console.group("QMD 검색 결과");
+      results.forEach((r, i) => {
+        console.log(`#${i + 1}`, {
+          file: r.file,
+          collection: r.collection,
+          relativePath: r.relativePath,
+          title: r.title
+        });
       });
-    });
-    console.groupEnd();
+      console.groupEnd();
+    }
 
     for (const result of results) {
       this.renderResultCard(result);
@@ -296,7 +297,7 @@ export class QmdSearchView extends ItemView {
       await leaf.openFile(file);
     } else {
       new Notice(`볼트 내에서 파일을 찾을 수 없습니다.\n상대경로: ${normalizedVaultPath}`);
-      console.warn("QMD 파일 열기 실패:", { normalizedVaultPath, result, vaultRoot });
+      this.plugin.log("WARN", "QMD 파일 열기 실패:", { normalizedVaultPath, result, vaultRoot });
     }
   }
 

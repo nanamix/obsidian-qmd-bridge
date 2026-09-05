@@ -33,21 +33,41 @@ export interface CollectionPathMap {
   [collection: string]: string;
 }
 
+export type LogLevel = "ERROR" | "WARN" | "INFO" | "DEBUG";
+
 export class QmdExecutor {
   private qmdPath: string;
   private collectionPaths: CollectionPathMap;
   private forceCpu: boolean;
+  private dryRun: boolean;
+  private logLevel: LogLevel;
 
-  constructor(qmdPath: string, collectionPaths: CollectionPathMap = {}, forceCpu = false) {
+  constructor(
+    qmdPath: string,
+    collectionPaths: CollectionPathMap = {},
+    forceCpu = false,
+    dryRun = false,
+    logLevel: LogLevel = "INFO"
+  ) {
     this.qmdPath = qmdPath;
     this.collectionPaths = collectionPaths;
     this.forceCpu = forceCpu;
+    this.dryRun = dryRun;
+    this.logLevel = logLevel;
   }
 
-  updateSettings(qmdPath: string, collectionPaths: CollectionPathMap, forceCpu: boolean) {
+  updateSettings(
+    qmdPath: string,
+    collectionPaths: CollectionPathMap,
+    forceCpu: boolean,
+    dryRun: boolean,
+    logLevel: LogLevel
+  ) {
     this.qmdPath = qmdPath;
     this.collectionPaths = collectionPaths;
     this.forceCpu = forceCpu;
+    this.dryRun = dryRun;
+    this.logLevel = logLevel;
   }
 
   private getEnv(): NodeJS.ProcessEnv {
@@ -69,8 +89,28 @@ export class QmdExecutor {
     if (this.forceCpu) {
       env.QMD_FORCE_CPU = "1";
     }
+    env.QMD_LOG_LEVEL = this.logLevel.toLowerCase();
+    if (this.dryRun) {
+      env.QMD_DRY_RUN = "1";
+    }
 
     return env;
+  }
+
+  private shouldLog(level: LogLevel): boolean {
+    const order: Record<LogLevel, number> = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
+    return order[level] <= order[this.logLevel];
+  }
+
+  private log(level: LogLevel, ...args: unknown[]) {
+    if (!this.shouldLog(level)) return;
+    if (level === "ERROR") {
+      console.error(...args);
+    } else if (level === "WARN") {
+      console.warn(...args);
+    } else {
+      console.log(...args);
+    }
   }
 
   async runCommand(args: string[]): Promise<string> {
@@ -265,17 +305,12 @@ export class QmdExecutor {
       collection,
       relativePath: normalizedPath
     };
-  };
-  };
-    } catch (e) {
-      return { collection: match[1], relativePath: match[2] };
-    }
   }
 
   resolveToVaultRelativePath(result: QmdResult, vaultRoot: string): string | null {
     const collectionBase = this.collectionPaths[result.collection];
     if (!collectionBase) {
-      console.log("QMD: No collection path found for", result.collection);
+      this.log("INFO", "QMD: No collection path found for", result.collection);
       return null;
     }
 
@@ -285,7 +320,7 @@ export class QmdExecutor {
     const nvRoot = normalize(vaultRoot);
     const ncBase = normalize(collectionBase);
 
-    console.log("QMD Debug: Path Comparison", {
+    this.log("DEBUG", "QMD Debug: Path Comparison", {
       vaultRoot: nvRoot,
       collectionBase: ncBase,
       resultPath: result.relativePath
@@ -312,11 +347,11 @@ export class QmdExecutor {
         ? `${vaultRelativePrefix}/${cleanRelativePath}`
         : cleanRelativePath;
 
-      console.log("QMD Debug: Resolved Vault Path ->", finalPath);
+      this.log("DEBUG", "QMD Debug: Resolved Vault Path ->", finalPath);
       return finalPath;
     }
 
-    console.log("QMD Debug: Path is outside this vault.");
+    this.log("DEBUG", "QMD Debug: Path is outside this vault.");
     return null;
   }
 
@@ -359,7 +394,7 @@ export class QmdExecutor {
 
       return result;
     } catch (e) {
-      console.error("qmd config 읽기 실패:", e);
+      this.log("WARN", "qmd config 읽기 실패:", e);
       return {};
     }
   }

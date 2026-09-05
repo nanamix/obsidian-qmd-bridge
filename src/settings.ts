@@ -4,6 +4,8 @@ import type QmdBridgePlugin from "./main";
 export interface QmdBridgeSettings {
   qmdPath: string;
   forceCpu: boolean;
+  dryRun: boolean;
+  logLevel: "ERROR" | "WARN" | "INFO" | "DEBUG";
   defaultSearchType: "bm25" | "vector" | "deep";
   defaultResultCount: number;
   defaultCollection: string;
@@ -11,8 +13,10 @@ export interface QmdBridgeSettings {
 }
 
 export const DEFAULT_SETTINGS: QmdBridgeSettings = {
-  qmdPath: "/Users/jyha/.asdf/shims/qmd",
+  qmdPath: "qmd",
   forceCpu: true,
+  dryRun: false,
+  logLevel: "INFO",
   defaultSearchType: "bm25",
   defaultResultCount: 10,
   defaultCollection: "obsidian",
@@ -68,6 +72,34 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.forceCpu)
           .onChange(async (value) => {
             this.plugin.settings.forceCpu = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Dry-run 모드")
+      .setDesc("실제 업데이트/임베딩 실행 없이 수행 예정 작업만 표시합니다")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.dryRun)
+          .onChange(async (value) => {
+            this.plugin.settings.dryRun = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("로그 레벨")
+      .setDesc("로그 상세도 (기본: INFO)")
+      .addDropdown((drop) =>
+        drop
+          .addOption("ERROR", "ERROR")
+          .addOption("WARN", "WARN")
+          .addOption("INFO", "INFO")
+          .addOption("DEBUG", "DEBUG")
+          .setValue(this.plugin.settings.logLevel)
+          .onChange(async (value) => {
+            this.plugin.settings.logLevel = value as "ERROR" | "WARN" | "INFO" | "DEBUG";
             await this.plugin.saveSettings();
           })
       );
