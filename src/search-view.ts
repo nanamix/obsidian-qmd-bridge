@@ -99,9 +99,15 @@ export class QmdSearchView extends ItemView {
     this.resultsContainer = container.createEl("div", { cls: "qmd-results-container" });
     this.showEmpty("검색어를 입력하세요");
 
-    this.registerEvent(this.app.vault.on("create", () => this.invalidateFuzzyPathIndex()));
-    this.registerEvent(this.app.vault.on("delete", () => this.invalidateFuzzyPathIndex()));
-    this.registerEvent(this.app.vault.on("rename", () => this.invalidateFuzzyPathIndex()));
+    this.registerEvent(this.app.vault.on("create", (file) => {
+      if (file instanceof TFile) this.invalidateFuzzyPathIndex();
+    }));
+    this.registerEvent(this.app.vault.on("delete", (file) => {
+      if (file instanceof TFile) this.invalidateFuzzyPathIndex();
+    }));
+    this.registerEvent(this.app.vault.on("rename", (file) => {
+      if (file instanceof TFile) this.invalidateFuzzyPathIndex();
+    }));
   }
 
   updateCollectionOptions() {
@@ -157,6 +163,7 @@ export class QmdSearchView extends ItemView {
       }
       await this.showResults(results, renderId);
     } catch (e) {
+      if (renderId !== this.renderGeneration) return;
       this.showError(e instanceof Error ? e.message : String(e));
     }
   }
@@ -184,6 +191,7 @@ export class QmdSearchView extends ItemView {
   }
 
   private async showResults(results: QmdResult[], renderId: number) {
+    if (renderId !== this.renderGeneration) return;
     this.resultsContainer.empty();
 
     if (results.length === 0) {
@@ -292,11 +300,6 @@ export class QmdSearchView extends ItemView {
 
     // qmd 정규화 역변환: 소문자 통일 + '_' == '-' 동일 취급
     const target = this.normalizeFuzzyPath(vaultRelativePath);
-    this.ensureFuzzyPathIndex();
-    const cached = this.fuzzyPathIndex?.get(target);
-    if (cached) return cached;
-
-    this.invalidateFuzzyPathIndex();
     this.ensureFuzzyPathIndex();
     return this.fuzzyPathIndex?.get(target) ?? null;
   }
