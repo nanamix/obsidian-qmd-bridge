@@ -25,10 +25,21 @@ export const DEFAULT_SETTINGS: QmdBridgeSettings = {
 
 export class QmdBridgeSettingTab extends PluginSettingTab {
   plugin: QmdBridgePlugin;
+  private saveDebounceTimer: number | null = null;
 
   constructor(app: App, plugin: QmdBridgePlugin) {
     super(app, plugin);
     this.plugin = plugin;
+  }
+
+  private scheduleSaveSettings(delayMs = 250): void {
+    if (this.saveDebounceTimer !== null) {
+      window.clearTimeout(this.saveDebounceTimer);
+    }
+    this.saveDebounceTimer = window.setTimeout(() => {
+      this.saveDebounceTimer = null;
+      void this.plugin.saveSettings();
+    }, delayMs);
   }
 
   display(): void {
@@ -46,6 +57,7 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
           .setPlaceholder("/usr/local/bin/qmd")
           .setValue(this.plugin.settings.qmdPath)
           .onChange(async (value) => {
+            if (this.plugin.settings.qmdPath === value) return;
             this.plugin.settings.qmdPath = value;
             await this.plugin.saveSettings();
           })
@@ -71,6 +83,7 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
         toggle
           .setValue(this.plugin.settings.forceCpu)
           .onChange(async (value) => {
+            if (this.plugin.settings.forceCpu === value) return;
             this.plugin.settings.forceCpu = value;
             await this.plugin.saveSettings();
           })
@@ -83,6 +96,7 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
         toggle
           .setValue(this.plugin.settings.dryRun)
           .onChange(async (value) => {
+            if (this.plugin.settings.dryRun === value) return;
             this.plugin.settings.dryRun = value;
             await this.plugin.saveSettings();
           })
@@ -99,7 +113,9 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
           .addOption("DEBUG", "DEBUG")
           .setValue(this.plugin.settings.logLevel)
           .onChange(async (value) => {
-            this.plugin.settings.logLevel = value as "ERROR" | "WARN" | "INFO" | "DEBUG";
+            const next = value as "ERROR" | "WARN" | "INFO" | "DEBUG";
+            if (this.plugin.settings.logLevel === next) return;
+            this.plugin.settings.logLevel = next;
             await this.plugin.saveSettings();
           })
       );
@@ -115,7 +131,9 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
           .addOption("deep", "Deep (심층)")
           .setValue(this.plugin.settings.defaultSearchType)
           .onChange(async (value) => {
-            this.plugin.settings.defaultSearchType = value as "bm25" | "vector" | "deep";
+            const next = value as "bm25" | "vector" | "deep";
+            if (this.plugin.settings.defaultSearchType === next) return;
+            this.plugin.settings.defaultSearchType = next;
             await this.plugin.saveSettings();
           })
       );
@@ -128,12 +146,12 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("10")
           .setValue(String(this.plugin.settings.defaultResultCount))
-          .onChange(async (value) => {
+          .onChange((value) => {
             const num = parseInt(value);
-            if (!isNaN(num) && num > 0) {
-              this.plugin.settings.defaultResultCount = num;
-              await this.plugin.saveSettings();
-            }
+            if (isNaN(num) || num <= 0) return;
+            if (this.plugin.settings.defaultResultCount === num) return;
+            this.plugin.settings.defaultResultCount = num;
+            this.scheduleSaveSettings();
           })
       );
 
@@ -145,9 +163,10 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("obsidian")
           .setValue(this.plugin.settings.defaultCollection)
-          .onChange(async (value) => {
+          .onChange((value) => {
+            if (this.plugin.settings.defaultCollection === value) return;
             this.plugin.settings.defaultCollection = value;
-            await this.plugin.saveSettings();
+            this.scheduleSaveSettings();
           })
       );
 
@@ -189,56 +208,67 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
 
     const tbody = tableEl.createEl("tbody");
 
-    const renderRows = () => {
-      tbody.empty();
-      const paths = this.plugin.settings.collectionPaths;
-      for (const [name, colPath] of Object.entries(paths)) {
-        const row = tbody.createEl("tr");
-        const nameCell = row.createEl("td");
-        nameCell.createEl("input", {
-          type: "text",
-          value: name,
-          attr: { style: "width:100%; font-size:12px;" },
-        }).addEventListener("change", async (e) => {
-          const newName = (e.target as HTMLInputElement).value.trim();
-          if (newName && newName !== name) {
-            const val = this.plugin.settings.collectionPaths[name];
-            delete this.plugin.settings.collectionPaths[name];
-            this.plugin.settings.collectionPaths[newName] = val;
-            await this.plugin.saveSettings();
-          }
-        });
+    const createRow = (initialName: string, initialPath: string) => {
+      const row = tbody.createEl("tr");
+      let currentName = initialName;
 
-        const pathCell = row.createEl("td");
-        pathCell.createEl("input", {
-          type: "text",
-          value: colPath,
-          attr: { style: "width:100%; font-size:12px;" },
-        }).addEventListener("change", async (e) => {
-          this.plugin.settings.collectionPaths[name] = (e.target as HTMLInputElement).value.trim();
-          await this.plugin.saveSettings();
-        });
+      const nameCell = row.createEl("td");
+      const nameInput = nameCell.createEl("input", {
+        type: "text",
+        value: currentName,
+        attr: { style: "width:100%; font-size:12px;" },
+      });
+      nameInput.addEventListener("change", async (e) => {
+        const newName = (e.target as HTMLInputElement).value.trim();
+        if (!newName || newName === currentName) return;
 
-        const actionCell = row.createEl("td");
-        actionCell
-          .createEl("button", { text: "삭제" })
-          .addEventListener("click", async () => {
-            delete this.plugin.settings.collectionPaths[name];
-            await this.plugin.saveSettings();
-            renderRows();
-          });
-      }
+        const val = this.plugin.settings.collectionPaths[currentName];
+        delete this.plugin.settings.collectionPaths[currentName];
+        this.plugin.settings.collectionPaths[newName] = val;
+        currentName = newName;
+        await this.plugin.saveSettings();
+      });
+
+      const pathCell = row.createEl("td");
+      const pathInput = pathCell.createEl("input", {
+        type: "text",
+        value: initialPath,
+        attr: { style: "width:100%; font-size:12px;" },
+      });
+      pathInput.addEventListener("change", async (e) => {
+        const nextPath = (e.target as HTMLInputElement).value.trim();
+        if (this.plugin.settings.collectionPaths[currentName] === nextPath) return;
+        this.plugin.settings.collectionPaths[currentName] = nextPath;
+        await this.plugin.saveSettings();
+      });
+
+      const actionCell = row.createEl("td");
+      actionCell.createEl("button", { text: "삭제" }).addEventListener("click", async () => {
+        delete this.plugin.settings.collectionPaths[currentName];
+        await this.plugin.saveSettings();
+        row.remove();
+      });
     };
 
-    renderRows();
+    const paths = this.plugin.settings.collectionPaths;
+    for (const [name, colPath] of Object.entries(paths)) {
+      createRow(name, colPath);
+    }
 
     // 새 항목 추가
     const addSetting = new Setting(containerEl);
     addSetting.setName("새 컬렉션 추가").addButton((btn) =>
       btn.setButtonText("+ 추가").onClick(async () => {
-        this.plugin.settings.collectionPaths["새컬렉션"] = "/path/to/vault";
-        await this.plugin.saveSettings();
-        renderRows();
+        const name = "새컬렉션";
+        const path = "/path/to/vault";
+        const existed = this.plugin.settings.collectionPaths[name];
+        this.plugin.settings.collectionPaths[name] = path;
+        if (existed !== path) {
+          await this.plugin.saveSettings();
+        }
+        if (!existed) {
+          createRow(name, path);
+        }
       })
     );
   }
