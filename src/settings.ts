@@ -221,6 +221,11 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
       nameInput.addEventListener("change", async (e) => {
         const newName = (e.target as HTMLInputElement).value.trim();
         if (!newName || newName === currentName) return;
+        if (Object.prototype.hasOwnProperty.call(this.plugin.settings.collectionPaths, newName)) {
+          (e.target as HTMLInputElement).value = currentName;
+          new Notice("이미 존재하는 컬렉션 이름입니다.");
+          return;
+        }
 
         const val = this.plugin.settings.collectionPaths[currentName];
         delete this.plugin.settings.collectionPaths[currentName];
@@ -259,16 +264,17 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
     const addSetting = new Setting(containerEl);
     addSetting.setName("새 컬렉션 추가").addButton((btn) =>
       btn.setButtonText("+ 추가").onClick(async () => {
-        const name = "새컬렉션";
+        const baseName = "새컬렉션";
+        let name = baseName;
+        let suffix = 2;
+        while (Object.prototype.hasOwnProperty.call(this.plugin.settings.collectionPaths, name)) {
+          name = `${baseName}${suffix}`;
+          suffix += 1;
+        }
         const path = "/path/to/vault";
-        const existed = this.plugin.settings.collectionPaths[name];
         this.plugin.settings.collectionPaths[name] = path;
-        if (existed !== path) {
-          await this.plugin.saveSettings();
-        }
-        if (!existed) {
-          createRow(name, path);
-        }
+        await this.plugin.saveSettings();
+        createRow(name, path);
       })
     );
   }
