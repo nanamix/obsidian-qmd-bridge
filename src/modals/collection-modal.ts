@@ -1,5 +1,6 @@
 import { App, Modal } from "obsidian";
 
+/** qmd collection list의 원문 출력을 간단히 확인하는 읽기 전용 모달이다. */
 export class CollectionModal extends Modal {
   private content: string;
 
@@ -8,6 +9,7 @@ export class CollectionModal extends Modal {
     this.content = content;
   }
 
+  /** 컬렉션 목록도 status와 같은 패턴을 사용해 출력 차이를 최소화한다. */
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();

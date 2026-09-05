@@ -1,5 +1,6 @@
 import { App, Modal } from "obsidian";
 
+/** qmd status의 원문 출력을 읽기 전용 pre 블록으로 보여주는 단순 모달이다. */
 export class StatusModal extends Modal {
   private content: string;
 
@@ -8,6 +9,7 @@ export class StatusModal extends Modal {
     this.content = content;
   }
 
+  /** 상태 출력은 포맷 손실 없이 보여야 하므로 별도 파싱 없이 그대로 pre.textContent에 넣는다. */
   onOpen() {
     const { contentEl, modalEl } = this;
     modalEl.addClass("qmd-modal-large");

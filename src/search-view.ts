@@ -4,6 +4,23 @@ import type { QmdResult } from "./qmd-executor";
 
 export const SEARCH_VIEW_TYPE = "qmd-search-view";
 
+/**
+ * 검색 전용 사이드바 뷰.
+ *
+ * 흐름 개요:
+ * onOpen
+ *   -> 액션 버튼 / 검색 입력 / 옵션 / 결과 컨테이너 렌더링
+ * doSearch
+ *   -> qmd search/vsearch/query 실행
+ *   -> showResults가 카드 단위로 점진 렌더링
+ * 카드 클릭
+ *   -> qmd URI를 볼트 상대 경로로 변환
+ *   -> 정확 경로 또는 퍼지 경로로 TFile 탐색 후 열기
+ *
+ * 핵심 상태:
+ * - fuzzyPathIndex: qmd의 경로 정규화와 실제 볼트 파일명을 연결하는 캐시
+ * - renderGeneration: 늦게 끝난 비동기 렌더가 최신 결과를 덮어쓰지 않도록 막는 세대 번호
+ */
 export class QmdSearchView extends ItemView {
   plugin: QmdBridgePlugin;
   private searchInput: HTMLInputElement;
@@ -31,6 +48,7 @@ export class QmdSearchView extends ItemView {
     return "search";
   }
 
+  /** 뷰를 처음 열 때 버튼/입력 UI를 조립하고 파일 시스템 변경 이벤트에 캐시 무효화를 연결한다. */
   async onOpen() {
     const container = this.containerEl.children[1] as HTMLElement;
     container.empty();
@@ -104,6 +122,7 @@ export class QmdSearchView extends ItemView {
     this.registerEvent(this.app.vault.on("rename", () => this.invalidateFuzzyPathIndex()));
   }
 
+  /** 설정 변경 후에도 열린 뷰를 재사용하기 위해 컬렉션 드롭다운만 부분 갱신한다. */
   updateCollectionOptions() {
     if (!this.collectionSelect) return;
     this.collectionSelect.empty();
@@ -123,6 +142,10 @@ export class QmdSearchView extends ItemView {
     }
   }
 
+  /**
+   * 현재 입력값을 읽어 검색 타입별 executor 메서드로 분기한다.
+   * Deep 검색의 전체 컬렉션 실행은 자주 실패하는 편이라, 동작은 유지하되 사전 경고만 제공한다.
+   */
   private async doSearch() {
     const query = this.searchInput.value.trim();
     if (!query) {
@@ -183,6 +206,11 @@ export class QmdSearchView extends ItemView {
     }
   }
 
+  /**
+   * 결과 카드를 순차 렌더링한다.
+   * 많은 결과가 한 번에 들어와도 주기적으로 event loop를 비워 UI 멈춤을 줄이고,
+   * 더 최근 검색이 시작되면 renderGeneration 비교로 오래된 렌더를 중단한다.
+   */
   private async showResults(results: QmdResult[], renderId: number) {
     this.resultsContainer.empty();
 
@@ -261,6 +289,7 @@ export class QmdSearchView extends ItemView {
       .substring(0, 200);
   }
 
+  /** qmd가 파일명을 소문자/하이픈 쪽으로 정규화해 저장하므로, 볼트 파일도 같은 기준으로 색인한다. */
   private normalizeFuzzyPath(path: string): string {
     return path.toLowerCase().replace(/_/g, "-");
   }
@@ -269,6 +298,7 @@ export class QmdSearchView extends ItemView {
     this.fuzzyPathIndex = null;
   }
 
+  /** 퍼지 경로 인덱스는 결과 열기 시점에만 지연 생성하고, 첫 동일 키만 보존해 결정성을 유지한다. */
   private ensureFuzzyPathIndex() {
     if (this.fuzzyPathIndex) return;
     const index = new Map<string, TFile>();
@@ -296,11 +326,16 @@ export class QmdSearchView extends ItemView {
     const cached = this.fuzzyPathIndex?.get(target);
     if (cached) return cached;
 
+    // 캐시가 오래되어 놓친 rename/create를 한 번 더 복구하기 위해 재색인을 재시도한다.
     this.invalidateFuzzyPathIndex();
     this.ensureFuzzyPathIndex();
     return this.fuzzyPathIndex?.get(target) ?? null;
   }
 
+  /**
+   * 검색 결과를 현재 볼트의 실제 파일로 연다.
+   * 다른 볼트 컬렉션이거나 경로 매핑이 없으면 null/Notice로 처리하고, 직접 파일 열기까지는 진행하지 않는다.
+   */
   private async openResult(result: QmdResult) {
     let vaultRoot = "";
     if (this.app.vault.adapter instanceof FileSystemAdapter) {

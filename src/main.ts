@@ -6,6 +6,22 @@ import { ProgressModal } from "./modals/progress-modal";
 import { StatusModal } from "./modals/status-modal";
 import { CollectionModal } from "./modals/collection-modal";
 
+/**
+ * 플러그인 엔트리 포인트.
+ *
+ * 흐름 개요:
+ * onload
+ *   -> 설정 로드
+ *   -> QmdExecutor 생성
+ *   -> 검색 뷰 / 명령 / 리본 / 설정 탭 등록
+ * 사용자 액션
+ *   -> search view 열기
+ *   -> qmd update/embed/status/collection 실행
+ *   -> modal 또는 side view로 결과 전달
+ * 설정 저장
+ *   -> executor 갱신
+ *   -> 이미 열린 search view 옵션 재동기화
+ */
 type ReportStats = {
   warnings: number;
   errors: number;
@@ -80,6 +96,7 @@ export default class QmdBridgePlugin extends Plugin {
     });
   }
 
+  /** 레이아웃 준비 이후 확장 포인트를 남겨 두되, 현재는 자동으로 검색 패널을 열지 않는다. */
   private async initView() {
     // 이미 열려 있으면 skip
     const existing = this.app.workspace.getLeavesOfType(SEARCH_VIEW_TYPE);
@@ -88,6 +105,10 @@ export default class QmdBridgePlugin extends Plugin {
     }
   }
 
+  /**
+   * 검색 패널을 재사용 가능한 단일 사이드 리프로 유지한다.
+   * 이미 열려 있으면 해당 리프를 노출하고, 없으면 오른쪽 패널에 새로 만든다.
+   */
   async activateSearchView() {
     const { workspace } = this.app;
 
@@ -111,6 +132,7 @@ export default class QmdBridgePlugin extends Plugin {
     }
   }
 
+  /** update 명령은 중복 실행을 막고, 스트리밍 로그와 최종 요약을 ProgressModal에 누적한다. */
   runUpdate() {
     if (this.updateRunning) {
       new Notice("QMD 인덱스 업데이트가 이미 실행 중입니다.");
@@ -149,6 +171,7 @@ export default class QmdBridgePlugin extends Plugin {
     );
   }
 
+  /** embed 명령도 update와 같은 제어 흐름을 따르되 별도 실행 플래그를 사용한다. */
   runEmbed() {
     if (this.embedRunning) {
       new Notice("QMD 임베딩 생성이 이미 실행 중입니다.");
@@ -187,6 +210,7 @@ export default class QmdBridgePlugin extends Plugin {
     );
   }
 
+  /** dry-run 여부를 포함한 현재 플러그인 로그 기준을 다른 컴포넌트와 공유한다. */
   shouldLog(level: "ERROR" | "WARN" | "INFO" | "DEBUG"): boolean {
     return QmdBridgePlugin.LOG_LEVEL_ORDER[level] <= QmdBridgePlugin.LOG_LEVEL_ORDER[this.settings.logLevel];
   }
@@ -202,6 +226,10 @@ export default class QmdBridgePlugin extends Plugin {
     }
   }
 
+  /**
+   * 실제 qmd 실행 대신 "무엇이 실행될지"만 모달에 기록한다.
+   * 실행기 환경과 동일하게 forceCpu/logLevel 표시 규칙을 맞춰 dry-run 설명과 실제 동작이 어긋나지 않게 한다.
+   */
   private renderDryRun(modal: ProgressModal, operationName: string, command: string[]) {
     modal.appendLine("[DRY-RUN] 실제 변환은 실행되지 않습니다.");
     modal.appendLine("[DRY-RUN] 실행 예정 작업:");
@@ -226,6 +254,7 @@ export default class QmdBridgePlugin extends Plugin {
     );
   }
 
+  /** 스트리밍 로그를 요약하기 위한 카운터/집합을 작업마다 새로 만든다. */
   private createReportStats(): ReportStats {
     return {
       warnings: 0,
@@ -236,6 +265,10 @@ export default class QmdBridgePlugin extends Plugin {
     };
   }
 
+  /**
+   * qmd 로그 한 줄에서 파일처럼 보이는 토큰을 느슨하게 추출한다.
+   * 형식이 고정돼 있지 않아 따옴표 경로 -> 슬래시 포함 경로 -> 확장자 포함 토큰 순으로 완화한다.
+   */
   private extractFileToken(line: string): string | null {
     const quoted = line.match(/["'`]([^"'`]+)["'`]/);
     if (quoted && /[\/\\.]|qmd:\/\//i.test(quoted[1])) return quoted[1];
@@ -249,6 +282,10 @@ export default class QmdBridgePlugin extends Plugin {
     return null;
   }
 
+  /**
+   * 진행 로그 한 줄을 요약 통계에 반영한다.
+   * 같은 파일이 성공 후 실패로 뒤집히는 경우가 있어, 최종 집계는 succeeded/failed 집합을 분리해 계산한다.
+   */
   private accumulateReportLine(reportStats: ReportStats, line: string): void {
     const warningRe = /\bwarn(?:ing)?\b|경고/i;
     const errorRe = /\berror\b|오류/i;
@@ -274,6 +311,10 @@ export default class QmdBridgePlugin extends Plugin {
     }
   }
 
+  /**
+   * ProgressModal 마지막에 붙일 요약 문자열을 만든다.
+   * 파일 단위 로그가 전혀 없는 실패는 집계상 0건으로 보이지 않도록 최소 실패 1건으로 보정한다.
+   */
   private buildReportSummary(commandName: string, startedAt: number, reportStats: ReportStats, code: number): string {
     const durationSec = ((Date.now() - startedAt) / 1000).toFixed(2);
     let succeededWithoutFailures = 0;
@@ -330,6 +371,10 @@ export default class QmdBridgePlugin extends Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
 
+  /**
+   * 저장된 설정을 디스크에 기록한 뒤, 런타임 의존 객체도 즉시 같은 값으로 맞춘다.
+   * 이미 열린 검색 뷰를 닫지 않고 컬렉션 드롭다운만 새 설정으로 갱신하는 것이 핵심이다.
+   */
   async saveSettings() {
     await this.saveData(this.settings);
     // executor 설정 업데이트
