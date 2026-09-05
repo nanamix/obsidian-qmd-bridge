@@ -218,8 +218,9 @@ export default class QmdBridgePlugin extends Plugin {
   private buildReportSummary(commandName: string, startedAt: number, lines: string[], code: number): string {
     const durationSec = ((Date.now() - startedAt) / 1000).toFixed(2);
     const warningRe = /\bwarn(?:ing)?\b|경고/i;
-    const errorRe = /\berror\b|오류|\bfail(?:ed)?\b/i;
-    const successRe = /\bok\b|\bdone\b|\bsuccess\b|성공|완료|처리됨|업데이트됨|임베딩됨/i;
+    const errorRe = /\berror\b|오류/i;
+    const failureRe = /\bfail(?:ed)?\b|실패/i;
+    const successRe = /\bok\b|\bdone\b|\bsuccess\b|\bprocessed\b|\bindexed\b|\bembedded\b|\bupdated\b|성공|완료|처리됨|업데이트됨|임베딩됨/i;
 
     let warnings = 0;
     let errors = 0;
@@ -241,21 +242,20 @@ export default class QmdBridgePlugin extends Plugin {
     };
 
     for (const line of lines) {
-      const hasError = errorRe.test(line);
+      const hasError = errorRe.test(line) || failureRe.test(line);
       const hasWarning = warningRe.test(line);
+      const hasFailure = failureRe.test(line) || errorRe.test(line);
+      const hasSuccess = successRe.test(line);
 
-      if (hasError) {
-        errors += 1;
-      } else if (hasWarning) {
-        warnings += 1;
-      }
+      if (hasWarning) warnings += 1;
+      if (hasError) errors += 1;
 
       const fileToken = extractFileToken(line);
-      if (!fileToken) continue;
+      if (!fileToken || (!hasSuccess && !hasFailure)) continue;
       processedFiles.add(fileToken);
-      if (hasError) {
+      if (hasFailure) {
         failedFiles.add(fileToken);
-      } else if (successRe.test(line)) {
+      } else if (hasSuccess) {
         succeededFiles.add(fileToken);
       }
     }
