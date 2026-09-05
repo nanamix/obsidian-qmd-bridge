@@ -13,7 +13,7 @@ export interface QmdBridgeSettings {
 }
 
 export const DEFAULT_SETTINGS: QmdBridgeSettings = {
-  qmdPath: "",
+  qmdPath: "/usr/local/bin/qmd",
   forceCpu: true,
   dryRun: false,
   logLevel: "INFO",

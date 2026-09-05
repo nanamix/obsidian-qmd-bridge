@@ -260,9 +260,9 @@ export default class QmdBridgePlugin extends Plugin {
       }
     }
 
-    const succeededCount =
-      processedFiles.size > 0 ? Math.max(0, succeededFiles.size - failedFiles.size) : code === 0 ? 1 : 0;
-    const failedCount = processedFiles.size > 0 ? failedFiles.size : code === 0 ? 0 : 1;
+    const succeededWithoutFailures = [...succeededFiles].filter((file) => !failedFiles.has(file)).length;
+    const succeededCount = processedFiles.size > 0 ? succeededWithoutFailures : 0;
+    const failedCount = processedFiles.size > 0 ? failedFiles.size : 0;
 
     return [
       "=== 변환 보고서 요약 ===",
