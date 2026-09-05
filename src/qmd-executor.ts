@@ -3,10 +3,26 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+/**
+ * QMD CLI 호출과 결과 정규화를 담당한다.
+ *
+ * 흐름 개요:
+ * settings/main -> QmdExecutor 생성 및 갱신
+ *   -> 명령 실행(runCommand / runStreamingCommand)
+ *     -> stdout/stderr 정리
+ *       -> JSON 결과 파싱 / 경로 해석 / 상태 문자열 반환
+ *         -> search view / modal / settings UI가 소비
+ *
+ * 핵심 보장:
+ * - 실행 환경 변수는 모든 호출에서 동일한 규칙으로 조립한다.
+ * - qmd URI는 collection + vault 상대 경로로 정규화해 후속 UI가 재사용한다.
+ * - 오류 메시지는 사용자에게 보여줄 수 있는 짧은 형태로 축약한다.
+ */
 function normalizeSlashes(input: string): string {
   return input.replace(/\\/g, "/").replace(/\/{2,}/g, "/");
 }
 
+/** 퍼센트 인코딩이 깨진 경로도 그대로 통과시켜 검색 결과 렌더링을 막지 않도록 한다. */
 function safeDecodeURIComponent(input: string): string {
   try {
     return decodeURIComponent(input);
@@ -70,6 +86,11 @@ export class QmdExecutor {
     this.logLevel = logLevel;
   }
 
+  /**
+   * qmd subprocess에 주입할 실행 환경을 구성한다.
+   * - PATH는 데스크톱 환경에서 흔한 설치 위치를 앞쪽에 둔다.
+   * - dry-run / forceCpu는 실제 실행 시와 동일한 조건에서만 추가한다.
+   */
   private getEnv(): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
@@ -97,6 +118,7 @@ export class QmdExecutor {
     return env;
   }
 
+  /** 플러그인/실행기 양쪽에서 동일한 로그 레벨 우선순위를 사용한다. */
   private shouldLog(level: LogLevel): boolean {
     const order: Record<LogLevel, number> = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
     return order[level] <= order[this.logLevel];
@@ -113,6 +135,10 @@ export class QmdExecutor {
     }
   }
 
+  /**
+   * 단발성 qmd 명령을 실행한다.
+   * 성공 시 stdout 전체를 반환하고, 실패 시에는 스택 트레이스를 벗겨낸 메시지만 노출한다.
+   */
   async runCommand(args: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
       const proc = spawn(this.qmdPath, args, {
@@ -148,6 +174,10 @@ export class QmdExecutor {
     });
   }
 
+  /**
+   * update/embed처럼 긴 작업의 출력을 줄 단위로 스트리밍한다.
+   * stdout/stderr를 동일 버퍼로 합쳐 진행 상황을 순서대로 보여주되, 마지막 미완성 줄도 close 시점에 보존한다.
+   */
   runStreamingCommand(
     args: string[],
     onLine: (line: string) => void,
@@ -213,6 +243,10 @@ export class QmdExecutor {
     return this.parseJsonResults(output);
   }
 
+  /**
+   * qmd가 stderr/stdout에 섞어 쓰는 원시 오류에서 사용자 행동으로 이어질 핵심 메시지만 추린다.
+   * Deep 검색 컨텍스트 초과는 자주 발생하는 예외라서 별도 안내문으로 치환한다.
+   */
   /** stderr / stdout 에서 스택 트레이스를 제거하고 핵심 오류 메시지만 반환 */
   private extractCleanError(raw: string): string {
     if (!raw) return "알 수 없는 오류";
@@ -247,6 +281,10 @@ export class QmdExecutor {
     return this.parseJsonResults(output);
   }
 
+  /**
+   * qmd 출력에서 JSON 배열 부분만 골라 검색 결과로 정규화한다.
+   * 진행 로그가 함께 섞여도 최대한 복구하고, 파싱 실패 시에는 예외를 다시 던지지 않고 빈 결과로 안전하게 처리한다.
+   */
   private parseJsonResults(output: string): QmdResult[] {
     try {
       // stdout에서 JSON 배열 부분만 추출 (vsearch는 진행 상황을 stderr로 내보내지만 혼용될 수 있음)
@@ -284,6 +322,10 @@ export class QmdExecutor {
     return this.runCommand(["collection", "list"]);
   }
 
+  /**
+   * qmd://collection/path URI를 UI 친화적인 구조로 변환한다.
+   * 경로는 퍼센트 디코딩과 슬래시 정규화를 거치며, collection/path 중 하나라도 비어 있으면 무효로 본다.
+   */
   parseQmdUri(uri: string): { collection: string; relativePath: string } | null {
     if (!uri || typeof uri !== "string") return null;
 
@@ -307,6 +349,10 @@ export class QmdExecutor {
     };
   }
 
+  /**
+   * qmd 결과 경로를 현재 Obsidian 볼트 기준 상대 경로로 변환한다.
+   * 같은 볼트 내부 컬렉션만 열 수 있으므로, 컬렉션 루트가 현재 볼트 바깥이면 null을 반환해 상위 UI가 안내문을 고른다.
+   */
   resolveToVaultRelativePath(result: QmdResult, vaultRoot: string): string | null {
     const collectionBase = this.collectionPaths[result.collection];
     if (!collectionBase) {
@@ -314,7 +360,7 @@ export class QmdExecutor {
       return null;
     }
 
-    // 경로 정규화 함수
+    // 비교용 경로는 구분자와 마지막 슬래시만 통일한다.
     const normalize = (p: string) => p.replace(/[\\\/]+/g, "/").replace(/\/$/, "");
     
     const nvRoot = normalize(vaultRoot);
@@ -326,7 +372,7 @@ export class QmdExecutor {
       resultPath: result.relativePath
     });
 
-    // 대소문자 구분 없이 비교 (macOS/Windows 대응)
+    // macOS/Windows 환경에서는 대소문자 차이만으로 볼트 내부 파일을 놓치지 않도록 소문자 비교를 사용한다.
     const nvRootLower = nvRoot.toLowerCase();
     const ncBaseLower = ncBase.toLowerCase();
 
@@ -336,6 +382,7 @@ export class QmdExecutor {
     ) {
       let vaultRelativePrefix = "";
       if (ncBaseLower !== nvRootLower) {
+        // 컬렉션 루트가 볼트 하위 폴더를 가리키는 경우, 그 하위 경로를 상대 경로 prefix로 보존한다.
         vaultRelativePrefix = ncBase
           .slice(nvRoot.length)
           .replace(/^[\\\/]/, "");
@@ -355,6 +402,10 @@ export class QmdExecutor {
     return null;
   }
 
+  /**
+   * ~/.config/qmd/index.yml의 collections 섹션에서 name -> path 매핑만 얕게 추출한다.
+   * 완전한 YAML 파서는 아니므로 현재 qmd 설정 포맷을 전제로 하며, 형식이 다르면 빈 맵으로 안전하게 되돌린다.
+   */
   async parseQmdConfig(): Promise<CollectionPathMap> {
     const configPath = path.join(os.homedir(), ".config", "qmd", "index.yml");
     try {

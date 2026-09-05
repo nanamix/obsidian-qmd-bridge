@@ -1,6 +1,20 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type QmdBridgePlugin from "./main";
 
+/**
+ * 플러그인 설정 모델과 설정 탭 UI를 정의한다.
+ *
+ * 흐름 개요:
+ * display()
+ *   -> 현재 설정값으로 컨트롤 렌더링
+ *   -> 개별 입력 변경 시 saveSettings 또는 debounce 저장
+ *   -> collection path 표 수정/추가/삭제
+ *   -> 저장 완료 후 main.ts가 executor/search view를 재동기화
+ *
+ * 주의점:
+ * - 텍스트 입력은 타이핑 중 저장 폭주를 막기 위해 필요한 곳만 debounce 한다.
+ * - 컬렉션 이름 변경은 키 재배치이므로 중복을 허용하면 기존 매핑이 덮어써진다.
+ */
 export interface QmdBridgeSettings {
   qmdPath: string;
   forceCpu: boolean;
@@ -32,6 +46,7 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  /** 숫자/텍스트 입력처럼 연속 변경이 잦은 필드는 짧게 지연 저장해 디스크 쓰기와 UI 갱신 빈도를 줄인다. */
   private scheduleSaveSettings(delayMs = 250): void {
     if (this.saveDebounceTimer !== null) {
       window.clearTimeout(this.saveDebounceTimer);
@@ -42,6 +57,10 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
     }, delayMs);
   }
 
+  /**
+   * 현재 설정 전체를 다시 그린다.
+   * collection table도 이 메서드 안에서 재생성되므로, 자동 로드 후에는 display()를 다시 호출해 새 행을 반영한다.
+   */
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
@@ -208,6 +227,10 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
 
     const tbody = tableEl.createEl("tbody");
 
+    /**
+     * 컬렉션 매핑 한 행은 "이름(key) 편집"과 "경로(value) 편집"의 저장 규칙이 다르다.
+     * 이름 변경은 객체 키 이동이고, 경로 변경은 현재 키 값만 교체한다.
+     */
     const createRow = (initialName: string, initialPath: string) => {
       const row = tbody.createEl("tr");
       let currentName = initialName;
@@ -221,6 +244,7 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
       nameInput.addEventListener("change", async (e) => {
         const newName = (e.target as HTMLInputElement).value.trim();
         if (!newName || newName === currentName) return;
+        // 이름 충돌 시 기존 매핑을 보존하는 편이 중요하므로, 입력값을 되돌리고 저장을 중단한다.
         if (Object.prototype.hasOwnProperty.call(this.plugin.settings.collectionPaths, newName)) {
           (e.target as HTMLInputElement).value = currentName;
           new Notice("이미 존재하는 컬렉션 이름입니다.");
@@ -267,6 +291,7 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
         const baseName = "새컬렉션";
         let name = baseName;
         let suffix = 2;
+        // 사용자가 여러 번 추가해도 기존 항목을 덮어쓰지 않도록 첫 빈 이름을 찾는다.
         while (Object.prototype.hasOwnProperty.call(this.plugin.settings.collectionPaths, name)) {
           name = `${baseName}${suffix}`;
           suffix += 1;
