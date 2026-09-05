@@ -3,6 +3,19 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+function normalizeSlashes(input: string): string {
+  return input.replace(/\\/g, "/").replace(/\/{2,}/g, "/");
+}
+
+function safeDecodeURIComponent(input: string): string {
+  try {
+    return decodeURIComponent(input);
+  } catch {
+    return input;
+  }
+}
+
+
 // 실제 qmd --json 출력 구조
 export interface QmdResult {
   docid: string;
@@ -232,13 +245,28 @@ export class QmdExecutor {
   }
 
   parseQmdUri(uri: string): { collection: string; relativePath: string } | null {
-    const match = uri.match(/^qmd:\/\/([^/]+)\/(.+)$/);
+    if (!uri || typeof uri !== "string") return null;
+
+    const trimmed = uri.trim();
+    const normalizedUri = trimmed.replace(/^qmd:\/*/i, "qmd://");
+
+    const match = normalizedUri.match(/^qmd:\/\/([^/]+)\/(.+)$/);
     if (!match) return null;
-    try {
-      return { 
-        collection: match[1], 
-        relativePath: decodeURIComponent(match[2]) 
-      };
+
+    const collection = match[1]?.trim();
+    const rawPath = match[2] ?? "";
+
+    if (!collection || !rawPath) return null;
+
+    const decoded = safeDecodeURIComponent(rawPath);
+    const normalizedPath = normalizeSlashes(decoded).replace(/^\/+/, "");
+
+    return {
+      collection,
+      relativePath: normalizedPath
+    };
+  };
+  };
     } catch (e) {
       return { collection: match[1], relativePath: match[2] };
     }
