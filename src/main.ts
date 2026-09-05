@@ -276,8 +276,12 @@ export default class QmdBridgePlugin extends Plugin {
 
   private buildReportSummary(commandName: string, startedAt: number, reportStats: ReportStats, code: number): string {
     const durationSec = ((Date.now() - startedAt) / 1000).toFixed(2);
-    const succeededWithoutFailures = [...reportStats.succeededFiles].filter((file) => !reportStats.failedFiles.has(file))
-      .length;
+    let succeededWithoutFailures = 0;
+    for (const file of reportStats.succeededFiles) {
+      if (!reportStats.failedFiles.has(file)) {
+        succeededWithoutFailures += 1;
+      }
+    }
     let succeededCount = reportStats.processedFiles.size > 0 ? succeededWithoutFailures : 0;
     let failedCount = reportStats.processedFiles.size > 0 ? reportStats.failedFiles.size : 0;
     let errorCount = reportStats.errors;
