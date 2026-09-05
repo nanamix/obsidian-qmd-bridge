@@ -1,3 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO="nanamix/obsidian-qmd-bridge"
+
+# 0) precheck
+gh auth status >/dev/null
+git rev-parse --is-inside-work-tree >/dev/null
+
+########################################
+# PR-A: #6 #7 #8 (release/metadata/docs)
+########################################
+git checkout main
+git pull --rebase
+git checkout -b chore/p1-release-metadata-docs
+
+mkdir -p docs
+
+# README.md
+cat > README.md <<'EOF'
 # Obsidian QMD Bridge
 
 QMD Bridge for Obsidian.  
