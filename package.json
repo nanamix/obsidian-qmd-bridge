@@ -6,15 +6,13 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
-    "deploy": "node esbuild.config.mjs production && cp main.js styles.css ${VAULT_PATH:?set VAULT_PATH}/.obsidian/plugins/qmd-bridge/",
-    "typecheck": "tsc --noEmit"
+    "deploy": "node esbuild.config.mjs production && cp main.js styles.css ${VAULT_PATH:?set VAULT_PATH}/.obsidian/plugins/qmd-bridge/"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "esbuild": "^0.28.1",
     "obsidian": "latest",
-    "typescript": "^5.9.3",
-    "vitest": "^5.0.0"
+    "typescript": "^5.0.0"
   },
   "dependencies": {
     "builtin-modules": "^5.0.0"
