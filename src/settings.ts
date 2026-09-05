@@ -13,7 +13,7 @@ export interface QmdBridgeSettings {
 }
 
 export const DEFAULT_SETTINGS: QmdBridgeSettings = {
-  qmdPath: "/Users/jyha/.asdf/shims/qmd",
+  qmdPath: "",
   forceCpu: true,
   dryRun: false,
   logLevel: "INFO",

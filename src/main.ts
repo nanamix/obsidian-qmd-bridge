@@ -217,23 +217,59 @@ export default class QmdBridgePlugin extends Plugin {
 
   private buildReportSummary(commandName: string, startedAt: number, lines: string[], code: number): string {
     const durationSec = ((Date.now() - startedAt) / 1000).toFixed(2);
-    const warnings = lines.filter((line) => /\bwarn(?:ing)?\b|경고/i.test(line)).length;
-    const errors = lines.filter((line) => /\berror\b|오류|\bfail(?:ed)?\b/i.test(line)).length;
-    const processedFiles = new Set(
-      lines
-        .map((line) => {
-          const match = line.match(/([^\s"'`]+?\.(?:md|markdown|qmd|txt))/i);
-          return match ? match[1] : "";
-        })
-        .filter(Boolean)
-    ).size;
+    const warningRe = /\bwarn(?:ing)?\b|경고/i;
+    const errorRe = /\berror\b|오류|\bfail(?:ed)?\b/i;
+    const successRe = /\bok\b|\bdone\b|\bsuccess\b|성공|완료|처리됨|업데이트됨|임베딩됨/i;
+
+    let warnings = 0;
+    let errors = 0;
+    const processedFiles = new Set<string>();
+    const succeededFiles = new Set<string>();
+    const failedFiles = new Set<string>();
+
+    const extractFileToken = (line: string): string | null => {
+      const quoted = line.match(/["'`]([^"'`]+)["'`]/);
+      if (quoted && /[\/\\.]|qmd:\/\//i.test(quoted[1])) return quoted[1];
+
+      const withSlash = line.match(/(?:^|\s)([^\s"'`]*[\/\\][^\s"'`]+)(?=\s|$)/);
+      if (withSlash) return withSlash[1];
+
+      const dotted = line.match(/(?:^|\s)([^\s"'`]+\.[a-zA-Z0-9]{1,8})(?=\s|$)/);
+      if (dotted) return dotted[1];
+
+      return null;
+    };
+
+    for (const line of lines) {
+      const hasError = errorRe.test(line);
+      const hasWarning = warningRe.test(line);
+
+      if (hasError) {
+        errors += 1;
+      } else if (hasWarning) {
+        warnings += 1;
+      }
+
+      const fileToken = extractFileToken(line);
+      if (!fileToken) continue;
+      processedFiles.add(fileToken);
+      if (hasError) {
+        failedFiles.add(fileToken);
+      } else if (successRe.test(line)) {
+        succeededFiles.add(fileToken);
+      }
+    }
+
+    const succeededCount =
+      processedFiles.size > 0 ? Math.max(0, succeededFiles.size - failedFiles.size) : code === 0 ? 1 : 0;
+    const failedCount = processedFiles.size > 0 ? failedFiles.size : code === 0 ? 0 : 1;
 
     return [
       "=== 변환 보고서 요약 ===",
       `작업: ${commandName}`,
-      `처리된 파일 수: ${processedFiles}`,
-      `성공한 변환: ${code === 0 ? 1 : 0}`,
-      `실패한 변환: ${code === 0 ? 0 : 1}`,
+      `처리된 파일 수: ${processedFiles.size}`,
+      `성공한 변환: ${succeededCount}`,
+      `실패한 변환: ${failedCount}`,
       `경고: ${warnings}`,
       `오류: ${errors}`,
       `실행 시간: ${durationSec}초`,
