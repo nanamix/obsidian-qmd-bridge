@@ -229,7 +229,7 @@ export default class QmdBridgePlugin extends Plugin {
 
   /**
    * 실제 qmd 실행 대신 "무엇이 실행될지"만 모달에 기록한다.
-   * 실행기 환경과 동일하게 forceCpu/logLevel 표시 규칙을 맞춰 dry-run 설명과 실제 동작이 어긋나지 않게 한다.
+   * 실행기 환경과 동일하게 forceCpu/embedParallelism/logLevel 표시 규칙을 맞춰 dry-run 설명과 실제 동작이 어긋나지 않게 한다.
    */
   private renderDryRun(modal: ProgressModal, operationName: string, command: string[]) {
     modal.appendLine("[DRY-RUN] 실제 변환은 실행되지 않습니다.");
@@ -374,6 +374,10 @@ export default class QmdBridgePlugin extends Plugin {
   async loadSettings() {
     const stored = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, stored);
+    this.settings.embedParallelism =
+      Number.isInteger(this.settings.embedParallelism) && this.settings.embedParallelism >= 1 && this.settings.embedParallelism <= 4
+        ? this.settings.embedParallelism
+        : DEFAULT_SETTINGS.embedParallelism;
     // forceCpu:true was the historical default. If the new setting is absent,
     // treat that value as the legacy default so upgrades do not keep forcing CPU.
     if (
