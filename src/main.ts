@@ -374,6 +374,10 @@ export default class QmdBridgePlugin extends Plugin {
   async loadSettings() {
     const stored = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, stored);
+    this.settings.embedParallelism =
+      Number.isInteger(this.settings.embedParallelism) && this.settings.embedParallelism >= 1 && this.settings.embedParallelism <= 4
+        ? this.settings.embedParallelism
+        : DEFAULT_SETTINGS.embedParallelism;
     // forceCpu:true was the historical default. If the new setting is absent,
     // treat that value as the legacy default so upgrades do not keep forcing CPU.
     if (
