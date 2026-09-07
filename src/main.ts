@@ -44,6 +44,7 @@ export default class QmdBridgePlugin extends Plugin {
       this.settings.qmdPath,
       this.settings.collectionPaths,
       this.settings.forceCpu,
+      this.settings.embedParallelism,
       this.settings.dryRun,
       this.settings.logLevel
     );
@@ -237,6 +238,9 @@ export default class QmdBridgePlugin extends Plugin {
     if (this.settings.forceCpu) {
       modal.appendLine("- QMD_FORCE_CPU=1");
     }
+    if (command[0] === "embed") {
+      modal.appendLine(`- QMD_EMBED_PARALLELISM=${this.settings.embedParallelism}`);
+    }
     modal.appendLine(`- QMD_LOG_LEVEL=${this.settings.logLevel.toLowerCase()}`);
     modal.finish(
       0,
@@ -368,7 +372,17 @@ export default class QmdBridgePlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const stored = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, stored);
+    // forceCpu:true was the historical default. If the new setting is absent,
+    // treat that value as the legacy default so upgrades do not keep forcing CPU.
+    if (
+      stored &&
+      !Object.prototype.hasOwnProperty.call(stored, "embedParallelism") &&
+      stored.forceCpu === true
+    ) {
+      this.settings.forceCpu = false;
+    }
   }
 
   /**
@@ -383,6 +397,7 @@ export default class QmdBridgePlugin extends Plugin {
         this.settings.qmdPath,
         this.settings.collectionPaths,
         this.settings.forceCpu,
+        this.settings.embedParallelism,
         this.settings.dryRun,
         this.settings.logLevel
       );

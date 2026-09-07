@@ -18,6 +18,7 @@ import type QmdBridgePlugin from "./main";
 export interface QmdBridgeSettings {
   qmdPath: string;
   forceCpu: boolean;
+  embedParallelism: number;
   dryRun: boolean;
   logLevel: "ERROR" | "WARN" | "INFO" | "DEBUG";
   defaultSearchType: "bm25" | "vector" | "deep";
@@ -28,7 +29,8 @@ export interface QmdBridgeSettings {
 
 export const DEFAULT_SETTINGS: QmdBridgeSettings = {
   qmdPath: "qmd",
-  forceCpu: true,
+  forceCpu: false,
+  embedParallelism: 1,
   dryRun: false,
   logLevel: "WARN",
   defaultSearchType: "bm25",
@@ -97,13 +99,30 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("CPU 모드 강제")
-      .setDesc("Metal 백엔드 오류가 있을 때 qmd 실행에 QMD_FORCE_CPU=1을 적용합니다")
+      .setDesc("Metal 백엔드 오류가 있을 때만 켜세요. 켜면 임베딩이 CPU에서 실행됩니다")
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.forceCpu)
           .onChange(async (value) => {
             if (this.plugin.settings.forceCpu === value) return;
             this.plugin.settings.forceCpu = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("임베딩 병렬성")
+      .setDesc("동시에 처리할 임베딩 컨텍스트 수입니다. CPU 코어 사용률을 직접 제한하지 않으며, CPU fallback의 동시성·메모리 부담을 낮추는 용도입니다")
+      .addDropdown((drop) =>
+        drop
+          .addOption("1", "1 (낮은 CPU 사용량)")
+          .addOption("2", "2 (균형)")
+          .addOption("4", "4 (빠른 처리)")
+          .setValue(String(this.plugin.settings.embedParallelism))
+          .onChange(async (value) => {
+            const next = Number(value);
+            if (this.plugin.settings.embedParallelism === next) return;
+            this.plugin.settings.embedParallelism = next;
             await this.plugin.saveSettings();
           })
       );

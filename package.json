@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
+    "test": "node --test tests/*.test.mjs",
     "deploy": "node esbuild.config.mjs production && cp main.js styles.css ${VAULT_PATH:?set VAULT_PATH}/.obsidian/plugins/qmd-bridge/"
   },
   "devDependencies": {

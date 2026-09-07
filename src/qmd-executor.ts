@@ -55,6 +55,7 @@ export class QmdExecutor {
   private qmdPath: string;
   private collectionPaths: CollectionPathMap;
   private forceCpu: boolean;
+  private embedParallelism: number;
   private dryRun: boolean;
   private logLevel: LogLevel;
 
@@ -62,12 +63,14 @@ export class QmdExecutor {
     qmdPath: string,
     collectionPaths: CollectionPathMap = {},
     forceCpu = false,
+    embedParallelism = 1,
     dryRun = false,
     logLevel: LogLevel = "WARN"
   ) {
     this.qmdPath = qmdPath;
     this.collectionPaths = collectionPaths;
     this.forceCpu = forceCpu;
+    this.embedParallelism = this.normalizeEmbedParallelism(embedParallelism);
     this.dryRun = dryRun;
     this.logLevel = logLevel;
   }
@@ -76,12 +79,14 @@ export class QmdExecutor {
     qmdPath: string,
     collectionPaths: CollectionPathMap,
     forceCpu: boolean,
+    embedParallelism: number,
     dryRun: boolean,
     logLevel: LogLevel
   ) {
     this.qmdPath = qmdPath;
     this.collectionPaths = collectionPaths;
     this.forceCpu = forceCpu;
+    this.embedParallelism = this.normalizeEmbedParallelism(embedParallelism);
     this.dryRun = dryRun;
     this.logLevel = logLevel;
   }
@@ -91,7 +96,11 @@ export class QmdExecutor {
    * - PATH는 데스크톱 환경에서 흔한 설치 위치를 앞쪽에 둔다.
    * - dry-run / forceCpu는 실제 실행 시와 동일한 조건에서만 추가한다.
    */
-  private getEnv(): NodeJS.ProcessEnv {
+  private normalizeEmbedParallelism(value: number): number {
+    return Number.isInteger(value) && value >= 1 && value <= 4 ? value : 1;
+  }
+
+  private getEnv(args: string[] = []): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       PATH: [
@@ -109,6 +118,9 @@ export class QmdExecutor {
 
     if (this.forceCpu) {
       env.QMD_FORCE_CPU = "1";
+    }
+    if (args[0] === "embed") {
+      env.QMD_EMBED_PARALLELISM = String(this.embedParallelism);
     }
     env.QMD_LOG_LEVEL = this.logLevel.toLowerCase();
     if (this.dryRun) {
@@ -142,7 +154,7 @@ export class QmdExecutor {
   async runCommand(args: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
       const proc = spawn(this.qmdPath, args, {
-        env: this.getEnv(),
+        env: this.getEnv(args),
       });
 
       let stdout = "";
@@ -185,7 +197,7 @@ export class QmdExecutor {
     onDone: (code: number) => void
   ): void {
     const proc = spawn(this.qmdPath, args, {
-      env: this.getEnv(),
+      env: this.getEnv(args),
     });
 
     let buffer = "";
