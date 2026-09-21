@@ -51,6 +51,11 @@ export interface CollectionPathMap {
 
 export type LogLevel = "ERROR" | "WARN" | "INFO" | "DEBUG";
 
+export interface RunOptions {
+  /** abort 시 자식 프로세스를 SIGTERM으로 종료한다. */
+  signal?: AbortSignal;
+}
+
 export class QmdExecutor {
   private qmdPath: string;
   private collectionPaths: CollectionPathMap;
@@ -151,10 +156,11 @@ export class QmdExecutor {
    * 단발성 qmd 명령을 실행한다.
    * 성공 시 stdout 전체를 반환하고, 실패 시에는 스택 트레이스를 벗겨낸 메시지만 노출한다.
    */
-  async runCommand(args: string[]): Promise<string> {
+  async runCommand(args: string[], opts: RunOptions = {}): Promise<string> {
     return new Promise((resolve, reject) => {
       const proc = spawn(this.qmdPath, args, {
         env: this.getEnv(args),
+        signal: opts.signal,
       });
 
       let stdout = "";
@@ -179,6 +185,10 @@ export class QmdExecutor {
       });
 
       proc.on("error", (err: Error) => {
+        if (err.name === "AbortError") {
+          reject(new Error("qmd 명령이 취소되었습니다"));
+          return;
+        }
         reject(
           new Error(`qmd 실행 실패: ${err.message}. 경로: ${this.qmdPath}`)
         );
@@ -194,10 +204,12 @@ export class QmdExecutor {
     args: string[],
     onLine: (line: string) => void,
     onError: (err: Error) => void,
-    onDone: (code: number) => void
+    onDone: (code: number) => void,
+    opts: RunOptions = {}
   ): void {
     const proc = spawn(this.qmdPath, args, {
       env: this.getEnv(args),
+      signal: opts.signal,
     });
 
     let buffer = "";
@@ -232,26 +244,28 @@ export class QmdExecutor {
   async search(
     query: string,
     collection?: string,
-    limit: number = 10
+    limit: number = 10,
+    opts: RunOptions = {}
   ): Promise<QmdResult[]> {
     // qmd search <query> --json -n <limit> [-c <collection>]
     const args = ["search", query, "--json", "-n", String(limit)];
     if (collection) args.push("-c", collection);
 
-    const output = await this.runCommand(args);
+    const output = await this.runCommand(args, opts);
     return this.parseJsonResults(output);
   }
 
   async vsearch(
     query: string,
     collection?: string,
-    limit: number = 10
+    limit: number = 10,
+    opts: RunOptions = {}
   ): Promise<QmdResult[]> {
     // qmd vsearch <query> --json -n <limit> [-c <collection>]
     const args = ["vsearch", query, "--json", "-n", String(limit)];
     if (collection) args.push("-c", collection);
 
-    const output = await this.runCommand(args);
+    const output = await this.runCommand(args, opts);
     return this.parseJsonResults(output);
   }
 
@@ -283,13 +297,14 @@ export class QmdExecutor {
   async deepQuery(
     query: string,
     collection?: string,
-    limit: number = 10
+    limit: number = 10,
+    opts: RunOptions = {}
   ): Promise<QmdResult[]> {
     // qmd query <query> --json -n <limit> [-c <collection>]
     const args = ["query", query, "--json", "-n", String(limit)];
     if (collection) args.push("-c", collection);
 
-    const output = await this.runCommand(args);
+    const output = await this.runCommand(args, opts);
     return this.parseJsonResults(output);
   }
 

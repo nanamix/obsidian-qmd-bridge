@@ -53,3 +53,19 @@ test("parseJsonResults recovers the JSON array from output mixed with progress l
   assert.deepEqual(parse("no json here [nope]"), []);
   assert.deepEqual(parse("[]"), []);
 });
+
+test("runCommand aborts the subprocess when the signal fires", async () => {
+  const { QmdExecutor, tempRoot } = await loadExecutor();
+  const slowQmd = join(tempRoot, "slow-qmd.mjs");
+  await writeFile(slowQmd, "#!/usr/bin/env node\nsetTimeout(() => {}, 10000);\n");
+  await chmod(slowQmd, 0o755);
+
+  const executor = new QmdExecutor(slowQmd);
+  const ac = new AbortController();
+  const started = Date.now();
+  const pending = executor.runCommand(["search", "x"], { signal: ac.signal });
+  setTimeout(() => ac.abort(), 50);
+
+  await assert.rejects(pending, /취소/);
+  assert.ok(Date.now() - started < 5000, "abort should not wait for the subprocess to finish");
+});
