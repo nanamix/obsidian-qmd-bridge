@@ -61,7 +61,8 @@ export class QmdSearchView extends ItemView {
 
     const mkBtn = (label: string, icon: string, onClick: () => void) => {
       const btn = actions.createEl("button", { cls: "qmd-action-btn", title: label });
-      btn.innerHTML = `<span class="qmd-action-icon">${icon}</span><span class="qmd-action-label">${label}</span>`;
+      btn.createSpan({ cls: "qmd-action-icon", text: icon });
+      btn.createSpan({ cls: "qmd-action-label", text: label });
       btn.addEventListener("click", onClick);
       return btn;
     };
