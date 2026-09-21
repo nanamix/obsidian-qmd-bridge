@@ -54,7 +54,11 @@ export type LogLevel = "ERROR" | "WARN" | "INFO" | "DEBUG";
 export interface RunOptions {
   /** abort 시 자식 프로세스를 SIGTERM으로 종료한다. */
   signal?: AbortSignal;
+  /** 이 시간 안에 끝나지 않으면 SIGTERM으로 종료한다. 기본 DEFAULT_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
+
+export const DEFAULT_TIMEOUT_MS = 60_000;
 
 export class QmdExecutor {
   private qmdPath: string;
@@ -157,10 +161,12 @@ export class QmdExecutor {
    * 성공 시 stdout 전체를 반환하고, 실패 시에는 스택 트레이스를 벗겨낸 메시지만 노출한다.
    */
   async runCommand(args: string[], opts: RunOptions = {}): Promise<string> {
+    const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     return new Promise((resolve, reject) => {
       const proc = spawn(this.qmdPath, args, {
         env: this.getEnv(args),
         signal: opts.signal,
+        timeout: timeoutMs,
       });
 
       let stdout = "";
@@ -174,9 +180,12 @@ export class QmdExecutor {
         stderr += data.toString();
       });
 
-      proc.on("close", (code: number) => {
+      proc.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
         if (code === 0) {
           resolve(stdout);
+        } else if (signal && !opts.signal?.aborted) {
+          // abort는 error 이벤트에서 처리되므로, 시그널 종료가 남았다면 타임아웃이다.
+          reject(new Error(`qmd 명령이 ${Math.round(timeoutMs / 1000)}초 안에 끝나지 않아 중단했습니다`));
         } else {
           // stderr에서 핵심 오류 메시지만 추출 (스택 트레이스 제거)
           const cleanError = this.extractCleanError(stderr || stdout);

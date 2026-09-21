@@ -69,3 +69,13 @@ test("runCommand aborts the subprocess when the signal fires", async () => {
   await assert.rejects(pending, /취소/);
   assert.ok(Date.now() - started < 5000, "abort should not wait for the subprocess to finish");
 });
+
+test("runCommand kills the subprocess after timeoutMs", async () => {
+  const { QmdExecutor, tempRoot } = await loadExecutor();
+  const slowQmd = join(tempRoot, "slow-qmd.mjs");
+  await writeFile(slowQmd, "#!/usr/bin/env node\nsetTimeout(() => {}, 10000);\n");
+  await chmod(slowQmd, 0o755);
+
+  const executor = new QmdExecutor(slowQmd);
+  await assert.rejects(executor.runCommand(["search", "x"], { timeoutMs: 100 }), /끝나지 않아/);
+});

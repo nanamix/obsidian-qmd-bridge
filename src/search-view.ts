@@ -182,7 +182,10 @@ export class QmdSearchView extends ItemView {
       } else if (type === "vector") {
         results = await this.plugin.executor.vsearch(query, collection, limit, opts);
       } else {
-        results = await this.plugin.executor.deepQuery(query, collection, limit, opts);
+        results = await this.plugin.executor.deepQuery(query, collection, limit, {
+          ...opts,
+          timeoutMs: this.plugin.settings.deepSearchTimeoutSec * 1000,
+        });
       }
       await this.showResults(results, renderId);
     } catch (e) {
