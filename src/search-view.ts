@@ -20,6 +20,7 @@ export const SEARCH_VIEW_TYPE = "qmd-search-view";
  * 핵심 상태:
  * - fuzzyPathIndex: qmd의 경로 정규화와 실제 볼트 파일명을 연결하는 캐시
  * - renderGeneration: 늦게 끝난 비동기 렌더가 최신 결과를 덮어쓰지 않도록 막는 세대 번호
+ * - searchAbort: 진행 중인 qmd 검색 프로세스. 새 검색이 시작되면 이전 프로세스를 abort한다
  */
 export class QmdSearchView extends ItemView {
   plugin: QmdBridgePlugin;
@@ -30,6 +31,7 @@ export class QmdSearchView extends ItemView {
   private resultsContainer: HTMLElement;
   private fuzzyPathIndex: Map<string, TFile> | null = null;
   private renderGeneration = 0;
+  private searchAbort: AbortController | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: QmdBridgePlugin) {
     super(leaf);
@@ -168,18 +170,24 @@ export class QmdSearchView extends ItemView {
 
     this.showLoading();
     const renderId = ++this.renderGeneration;
+    this.searchAbort?.abort();
+    const abort = new AbortController();
+    this.searchAbort = abort;
+    const opts = { signal: abort.signal };
 
     try {
       let results: QmdResult[];
       if (type === "bm25") {
-        results = await this.plugin.executor.search(query, collection, limit);
+        results = await this.plugin.executor.search(query, collection, limit, opts);
       } else if (type === "vector") {
-        results = await this.plugin.executor.vsearch(query, collection, limit);
+        results = await this.plugin.executor.vsearch(query, collection, limit, opts);
       } else {
-        results = await this.plugin.executor.deepQuery(query, collection, limit);
+        results = await this.plugin.executor.deepQuery(query, collection, limit, opts);
       }
       await this.showResults(results, renderId);
     } catch (e) {
+      // 취소된 검색의 실패는 더 새로운 검색의 로딩/결과 화면을 덮어쓰면 안 된다.
+      if (abort.signal.aborted) return;
       this.showError(e instanceof Error ? e.message : String(e));
     }
   }
@@ -374,5 +382,6 @@ export class QmdSearchView extends ItemView {
   async onClose() {
     this.invalidateFuzzyPathIndex();
     this.renderGeneration += 1;
+    this.searchAbort?.abort();
   }
 }
