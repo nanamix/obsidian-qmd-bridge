@@ -299,18 +299,15 @@ export class QmdExecutor {
    */
   private parseJsonResults(output: string): QmdResult[] {
     try {
-      // stdout에서 JSON 배열 부분만 추출 (vsearch는 진행 상황을 stderr로 내보내지만 혼용될 수 있음)
-      const jsonMatch = output.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) return [];
-
-      const raw: Array<{
+      const raw = this.extractJsonArray(output) as Array<{
         docid: string;
         score: number;
         file: string;
         title?: string;
         context?: string;
         snippet?: string;
-      }> = JSON.parse(jsonMatch[0]);
+      }> | null;
+      if (!raw) return [];
 
       return raw.map((item) => {
         const parsed = this.parseQmdUri(item.file);
@@ -324,6 +321,32 @@ export class QmdExecutor {
       console.error("QMD 결과 파싱 실패:", e, "출력:", output);
       return [];
     }
+  }
+
+  /**
+   * 진행 로그가 섞인 출력에서 JSON 배열 줄만 골라 파싱한다.
+   * `[`로 시작하는 줄을 후보 시작점으로 잡고, `]`로 끝나는 줄마다 파싱을 시도해 처음 성공한 배열을 돌려준다.
+   * ponytail: JSON 구조 문자({}[]")로 시작하지 않는 줄은 로그로 보고 버린다. `[INFO] ...`처럼 `[`로 시작하는 로그가
+   * 배열 중간에 끼면 복구하지 못한다 — 그때는 stderr를 stdout과 분리해 받는 쪽으로 올린다.
+   */
+  private extractJsonArray(output: string): unknown[] | null {
+    const lines = output.split("\n").map((l) => l.trim());
+    for (let start = 0; start < lines.length; start++) {
+      if (!lines[start].startsWith("[")) continue;
+      const chunk: string[] = [];
+      for (let i = start; i < lines.length; i++) {
+        if (!/^[\[\]{}"]/.test(lines[i])) continue;
+        chunk.push(lines[i]);
+        if (!lines[i].endsWith("]")) continue;
+        try {
+          const value = JSON.parse(chunk.join("\n"));
+          if (Array.isArray(value)) return value;
+        } catch {
+          // 아직 배열이 닫히지 않았거나 이 시작점이 로그였음 — 계속 시도
+        }
+      }
+    }
+    return null;
   }
 
   async status(): Promise<string> {
