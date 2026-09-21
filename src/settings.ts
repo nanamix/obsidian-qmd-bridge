@@ -23,6 +23,8 @@ export interface QmdBridgeSettings {
   logLevel: "ERROR" | "WARN" | "INFO" | "DEBUG";
   defaultSearchType: "bm25" | "vector" | "deep";
   defaultResultCount: number;
+  /** Deep 검색(qmd query)은 리랭킹 때문에 오래 걸리므로 별도 타임아웃(초)을 둔다. */
+  deepSearchTimeoutSec: number;
   defaultCollection: string;
   collectionPaths: { [collection: string]: string };
 }
@@ -35,6 +37,7 @@ export const DEFAULT_SETTINGS: QmdBridgeSettings = {
   logLevel: "WARN",
   defaultSearchType: "bm25",
   defaultResultCount: 10,
+  deepSearchTimeoutSec: 180,
   defaultCollection: "obsidian",
   collectionPaths: {},
 };
@@ -189,6 +192,23 @@ export class QmdBridgeSettingTab extends PluginSettingTab {
             if (isNaN(num) || num <= 0) return;
             if (this.plugin.settings.defaultResultCount === num) return;
             this.plugin.settings.defaultResultCount = num;
+            this.scheduleSaveSettings();
+          })
+      );
+
+    // Deep 검색 타임아웃
+    new Setting(containerEl)
+      .setName("Deep 검색 타임아웃 (초)")
+      .setDesc("qmd query가 이 시간 안에 끝나지 않으면 중단합니다. BM25/Vector는 60초 고정")
+      .addText((text) =>
+        text
+          .setPlaceholder("180")
+          .setValue(String(this.plugin.settings.deepSearchTimeoutSec))
+          .onChange((value) => {
+            const num = parseInt(value);
+            if (isNaN(num) || num <= 0) return;
+            if (this.plugin.settings.deepSearchTimeoutSec === num) return;
+            this.plugin.settings.deepSearchTimeoutSec = num;
             this.scheduleSaveSettings();
           })
       );
